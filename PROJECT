@@ -1,0 +1,7 @@
+domain: kubesphere.io
+repo: github.com/zryfish/tower
+resources:
+- group: tower
+  kind: Agent
+  version: v1alpha1
+version: "2"

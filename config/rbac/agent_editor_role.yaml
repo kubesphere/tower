@@ -1,0 +1,26 @@
+# permissions to do edit agents.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agent-editor-role
+rules:
+- apiGroups:
+  - tower.kubesphere.io
+  resources:
+  - agents
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - tower.kubesphere.io
+  resources:
+  - agents/status
+  verbs:
+  - get
+  - patch
+  - update
