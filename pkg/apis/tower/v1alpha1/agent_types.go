@@ -16,6 +16,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,14 +30,57 @@ type AgentSpec struct {
 
 	// Token used by agents to connect to proxy.
 	Token string
+
+	// KubeAPIServerPort is the port which listens for forwarding kube-apiserver traffic
+	KubeAPIServerPort uint16
+
+	// KubeSphereAPIServerPort is the port which listens for forwarding kubesphere apigateway traffic
+	KubeSphereAPIGatewayPort uint16
+}
+
+type AgentConditionType string
+
+const (
+	// Agent is initialized, and waiting for establishing to a proxy server
+	AgentInitialized AgentConditionType = "Initialized"
+
+	// Agent has successfully connected to proxy server
+	AgentConnected AgentConditionType = "Connected"
+
+	// Agent has lost connection to proxy server
+	AgentDisconnected AgentConditionType = "Disconnected"
+)
+
+type AgentCondition struct {
+	// Type of AgentCondition
+	Type AgentConditionType
+	// Status of the condition, one of True, False, Unknown.
+	Status v1.ConditionStatus `json:"status"`
+	// The last time this condition was updated.
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+	// Last time the condition transitioned from one status to another.
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// The reason for the condition's last transition.
+	Reason string `json:"reason,omitempty"`
+	// A human readable message indicating details about the transition.
+	Message string `json:"message,omitempty"`
 }
 
 // AgentStatus defines the observed state of Agent
 type AgentStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Represents the latest available observations of a agent's current state.
+	Conditions []AgentCondition `json:"conditions,omitempty"`
+
+	// Represents the connection quality, in ms
+	Ping uint64
 }
 
+// +genclient
+// +k8s:deepcopy-gen:interface=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
 // +kubebuilder:object:root=true
 
 // Agent is the Schema for the agents API
@@ -48,6 +92,7 @@ type Agent struct {
 	Status AgentStatus `json:"status,omitempty"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 
 // AgentList contains a list of Agent

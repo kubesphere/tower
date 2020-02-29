@@ -43,7 +43,7 @@ manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 deepcopy:
-	GO111MODULE=on go install -mod=vendor k8s.io/code-generator/cmd/deepcopy-gen
+	#GO111MODULE=on go install -mod=vendor k8s.io/code-generator/cmd/deepcopy-gen
 	${GOPATH}/bin/deepcopy-gen -i github.com/zryfish/tower/pkg/apis/... -h ./hack/boilerplate.go.txt -O zz_generated.deepcopy
 
 clienset:
