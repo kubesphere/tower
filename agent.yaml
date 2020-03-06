@@ -1,0 +1,9 @@
+apiVersion: tower.kubesphere.io/v1alpha1
+kind: Agent
+metadata:
+  name: alpha
+spec:
+  # Add fields here
+  token: ""
+  kubernetesAPIServerPort: 0
+  kubesphereAPIServerPort: 0

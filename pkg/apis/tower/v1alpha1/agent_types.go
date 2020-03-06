@@ -29,13 +29,13 @@ type AgentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Token used by agents to connect to proxy.
-	Token string
+	Token string `json:"token,omitempty"`
 
 	// KubeAPIServerPort is the port which listens for forwarding kube-apiserver traffic
-	KubeAPIServerPort uint16
+	KubernetesAPIServerPort uint16 `json:"kubernetesAPIServerPort,omitempty"`
 
 	// KubeSphereAPIServerPort is the port which listens for forwarding kubesphere apigateway traffic
-	KubeSphereAPIGatewayPort uint16
+	KubeSphereAPIGatewayPort uint16 `json:"kubesphereAPIServerPort,omitempty"`
 }
 
 type AgentConditionType string
@@ -46,14 +46,11 @@ const (
 
 	// Agent has successfully connected to proxy server
 	AgentConnected AgentConditionType = "Connected"
-
-	// Agent has lost connection to proxy server
-	AgentDisconnected AgentConditionType = "Disconnected"
 )
 
 type AgentCondition struct {
 	// Type of AgentCondition
-	Type AgentConditionType
+	Type AgentConditionType `json:"type,omitempty"`
 	// Status of the condition, one of True, False, Unknown.
 	Status v1.ConditionStatus `json:"status"`
 	// The last time this condition was updated.
@@ -75,13 +72,15 @@ type AgentStatus struct {
 	Conditions []AgentCondition `json:"conditions,omitempty"`
 
 	// Represents the connection quality, in ms
-	Ping uint64
+	Ping uint64 `json:"ping,omitempty"`
+
+	// Issued new kubeconfig by proxy server
+	KubeConfig []byte
 }
 
 // +genclient
-// +k8s:deepcopy-gen:interface=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
-// +kubebuilder:object:root=true
 
 // Agent is the Schema for the agents API
 type Agent struct {
@@ -93,7 +92,6 @@ type Agent struct {
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:object:root=true
 
 // AgentList contains a list of Agent
 type AgentList struct {

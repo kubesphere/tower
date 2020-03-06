@@ -11,10 +11,16 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
+all: agent proxy
+
+proxy: vet test
+	go build -o bin/proxy cmd/proxy/main.go
+
+agent: vet test
+	go build -o bin/agent cmd/agent/main.go
 
 # Run tests
-test: generate fmt vet manifests
+test:  fmt vet
 	go test ./... -coverprofile cover.out
 
 # Build manager binary

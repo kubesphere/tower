@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// HTTPServer extends net/http Server and
+// HTTPServer extends net/http Proxy and
 // adds graceful shutdowns
 type HTTPServer struct {
 	*http.Server
