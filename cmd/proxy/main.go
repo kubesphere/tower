@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/zryfish/tower/cmd/proxy/app"
+	"kubesphere.io/tower/cmd/proxy/app"
 	"log"
 )
 

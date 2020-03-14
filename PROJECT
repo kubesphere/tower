@@ -1,5 +1,5 @@
 domain: kubesphere.io
-repo: github.com/zryfish/tower
+repo: kubesphere.io/tower
 resources:
 - group: tower
   kind: Agent

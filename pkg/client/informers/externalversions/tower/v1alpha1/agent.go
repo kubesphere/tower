@@ -19,14 +19,14 @@ package v1alpha1
 import (
 	time "time"
 
-	towerv1alpha1 "github.com/zryfish/tower/pkg/apis/tower/v1alpha1"
-	versioned "github.com/zryfish/tower/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/zryfish/tower/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/zryfish/tower/pkg/client/listers/tower/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
+	towerv1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	versioned "kubesphere.io/tower/pkg/client/clientset/versioned"
+	internalinterfaces "kubesphere.io/tower/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "kubesphere.io/tower/pkg/client/listers/tower/v1alpha1"
 )
 
 // AgentInformer provides access to a shared informer and lister for

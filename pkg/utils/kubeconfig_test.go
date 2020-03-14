@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	caCertFile = "/Users/zry/go/src/github.com/zryfish/tower/certs/ca.crt"
-	caKeyFile  = "/Users/zry/go/src/github.com/zryfish/tower/certs/ca.key"
+	caCertFile = "/Users/zry/go/src/kubesphere.io/tower/certs/ca.crt"
+	caKeyFile  = "/Users/zry/go/src/kubesphere.io/tower/certs/ca.key"
 )
 
 func TestIssuerKubeconfig(t *testing.T) {
@@ -45,7 +45,7 @@ func TestGenerateCACertificateAndWriteToFile(t *testing.T) {
 }
 
 func TestNewCertAndKey(t *testing.T) {
-	basePath := "/Users/zry/go/src/github.com/zryfish/tower/certs/%s"
+	basePath := "/Users/zry/go/src/kubesphere.io/tower/certs/%s"
 	cacert, cakey, err := LoadCaAuthorityCertAndKey(caCertFile, caKeyFile)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestNewCertAndKey(t *testing.T) {
 		CommonName:   "Tower",
 		Organization: []string{"KubeSphere"},
 		AltNames:     certutil.AltNames{},
-		Usages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 
 	cert, key, err := NewCertAndKey(cacert, cakey, config)

@@ -3,8 +3,8 @@ package app
 import (
 	"flag"
 	"github.com/spf13/cobra"
-	"github.com/zryfish/tower/pkg/agent"
 	"k8s.io/klog"
+	"kubesphere.io/tower/pkg/agent"
 	"strings"
 )
 

@@ -19,10 +19,10 @@ package versioned
 import (
 	"fmt"
 
-	towerv1alpha1 "github.com/zryfish/tower/pkg/client/clientset/versioned/typed/tower/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
+	towerv1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/tower/v1alpha1"
 )
 
 type Interface interface {

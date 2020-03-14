@@ -17,8 +17,8 @@ limitations under the License.
 package tower
 
 import (
-	internalinterfaces "github.com/zryfish/tower/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/zryfish/tower/pkg/client/informers/externalversions/tower/v1alpha1"
+	internalinterfaces "kubesphere.io/tower/pkg/client/informers/externalversions/internalinterfaces"
+	v1alpha1 "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
 )
 
 // Interface provides access to each of this group's versions.

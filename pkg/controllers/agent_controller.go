@@ -2,12 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"github.com/zryfish/tower/pkg/apis/tower/v1alpha1"
-	clientset "github.com/zryfish/tower/pkg/client/clientset/versioned"
-	towerinformers "github.com/zryfish/tower/pkg/client/informers/externalversions/tower/v1alpha1"
-	towerlisters "github.com/zryfish/tower/pkg/client/listers/tower/v1alpha1"
-	"github.com/zryfish/tower/pkg/proxy"
-	"github.com/zryfish/tower/pkg/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +11,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
+	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
+	towerinformers "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
+	towerlisters "kubesphere.io/tower/pkg/client/listers/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/proxy"
+	"kubesphere.io/tower/pkg/utils"
 	"math/rand"
 	"time"
 )

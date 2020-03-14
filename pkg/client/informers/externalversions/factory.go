@@ -21,13 +21,13 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/zryfish/tower/pkg/client/clientset/versioned"
-	internalinterfaces "github.com/zryfish/tower/pkg/client/informers/externalversions/internalinterfaces"
-	tower "github.com/zryfish/tower/pkg/client/informers/externalversions/tower"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
+	versioned "kubesphere.io/tower/pkg/client/clientset/versioned"
+	internalinterfaces "kubesphere.io/tower/pkg/client/informers/externalversions/internalinterfaces"
+	tower "kubesphere.io/tower/pkg/client/informers/externalversions/tower"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.

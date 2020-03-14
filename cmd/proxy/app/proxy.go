@@ -3,13 +3,13 @@ package app
 import (
 	"flag"
 	"github.com/spf13/cobra"
-	clientset "github.com/zryfish/tower/pkg/client/clientset/versioned"
-	informers "github.com/zryfish/tower/pkg/client/informers/externalversions"
-	"github.com/zryfish/tower/pkg/controllers"
-	"github.com/zryfish/tower/pkg/proxy"
-	"github.com/zryfish/tower/pkg/utils"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
+	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
+	"kubesphere.io/tower/pkg/controllers"
+	"kubesphere.io/tower/pkg/proxy"
+	"kubesphere.io/tower/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
 	"k8s.io/klog"

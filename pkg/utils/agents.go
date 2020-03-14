@@ -1,8 +1,8 @@
 package utils
 
 import (
-	"github.com/zryfish/tower/pkg/apis/tower/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
 	"sync"
 )
 

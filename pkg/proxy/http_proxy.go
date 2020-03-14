@@ -3,10 +3,10 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"github.com/zryfish/tower/pkg/agent"
-	"github.com/zryfish/tower/pkg/utils"
 	"io/ioutil"
 	"k8s.io/klog"
+	"kubesphere.io/tower/pkg/agent"
+	"kubesphere.io/tower/pkg/utils"
 )
 
 type HTTPProxy struct {

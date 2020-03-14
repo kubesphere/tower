@@ -5,10 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/zryfish/tower/pkg/utils"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	k8sproxy "k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/klog"
+	"kubesphere.io/tower/pkg/utils"
 	"net"
 	"net/http"
 )

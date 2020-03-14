@@ -17,9 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/zryfish/tower/pkg/apis/tower/v1alpha1"
-	"github.com/zryfish/tower/pkg/client/clientset/versioned/scheme"
 	rest "k8s.io/client-go/rest"
+	v1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/client/clientset/versioned/scheme"
 )
 
 type TowerV1alpha1Interface interface {

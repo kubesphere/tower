@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 	"github.com/spf13/pflag"
-	"github.com/zryfish/tower/pkg/proxy"
+	"kubesphere.io/tower/pkg/proxy"
 	"os"
 
 	"k8s.io/klog"

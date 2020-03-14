@@ -1,4 +1,4 @@
-module github.com/zryfish/tower
+module kubesphere.io/tower
 
 go 1.12
 

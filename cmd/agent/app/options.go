@@ -3,9 +3,9 @@ package app
 import (
 	"fmt"
 	"github.com/spf13/pflag"
-	"github.com/zryfish/tower/pkg/agent"
-	"github.com/zryfish/tower/pkg/utils"
 	"k8s.io/klog"
+	"kubesphere.io/tower/pkg/agent"
+	"kubesphere.io/tower/pkg/utils"
 	"net/url"
 	"regexp"
 	"strings"

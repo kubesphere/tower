@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"github.com/zryfish/tower/pkg/utils"
+	"kubesphere.io/tower/pkg/utils"
 	"time"
 )
 

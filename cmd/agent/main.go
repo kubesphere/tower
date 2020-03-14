@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/zryfish/tower/cmd/agent/app"
+	"kubesphere.io/tower/cmd/agent/app"
 	"log"
 )
 
