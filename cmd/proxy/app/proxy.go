@@ -5,11 +5,11 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
 	"kubesphere.io/tower/pkg/controllers"
 	"kubesphere.io/tower/pkg/proxy"
-	"kubesphere.io/tower/pkg/utils"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
 	"k8s.io/klog"
@@ -30,7 +30,7 @@ func NewProxyCommand() *cobra.Command {
 			}
 
 			var config *rest.Config
-			config, err := clientcmd.BuildConfigFromFlags("", options.ProxyOptions.KubeconfigPath)
+			config, err := clientcmd.BuildConfigFromFlags("", options.ProxyOptions.KubeConfigPath)
 			if err != nil {
 				return err
 			}
@@ -40,19 +40,19 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			p, err := proxy.NewServer(options.ProxyOptions, agentsClient)
-			if err != nil {
-				return err
-			}
-
-			kubeconfigIssuer, err := utils.NewSimpleKubeConfigIssuer(options.ProxyOptions.CaCert, options.ProxyOptions.CaKey, options.ProxyOptions.ProxyServiceHost)
-			if err != nil {
-				return err
-			}
-
 			agentsInformerFactory := informers.NewSharedInformerFactory(agentsClient, 10*time.Minute)
 
-			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, p, kubeconfigIssuer)
+			p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient)
+			if err != nil {
+				return err
+			}
+
+			certificateIssuer, err := certs.NewSimpleCertificateIssuer(options.ProxyOptions.CaCert, options.ProxyOptions.CaKey, options.ProxyOptions.PublishServiceAddress)
+			if err != nil {
+				return err
+			}
+
+			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, certificateIssuer)
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)

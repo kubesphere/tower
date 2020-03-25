@@ -12,12 +12,12 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	towerinformers "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
 	towerlisters "kubesphere.io/tower/pkg/client/listers/tower/v1alpha1"
-	"kubesphere.io/tower/pkg/proxy"
-	"kubesphere.io/tower/pkg/utils"
 	"math/rand"
+	"reflect"
 	"time"
 )
 
@@ -29,8 +29,8 @@ const (
 	// 5ms, 10ms, 20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1.3s, 2.6s, 5.1s, 10.2s, 20.4s, 41s, 82s
 	maxRetries = 15
 
-	// allocate kubernetesApiserver port in range [portRangeMin, portRangeMax] for agents if port is not specified
-	// kubesphereApiserver port is defaulted to kubernetesApiserverPort + 10000
+	// allocate kubernetesAPIServer port in range [portRangeMin, portRangeMax] for agents if port is not specified
+	// kubesphereAPIServer port is defaulted to kubernetesAPIServerPort + 10000
 	portRangeMin = 6000
 	portRangeMax = 7000
 )
@@ -45,20 +45,17 @@ type AgentController struct {
 
 	workerLoopPeriod time.Duration
 
-	proxyAgentsClient proxy.ClientSet
-	kubeconfigIssuer  utils.KubeConfigIssuer
+	certificateIssuer certs.CertificateIssuer
 }
 
 func NewAgentController(agentInformer towerinformers.AgentInformer,
 	client clientset.Interface,
-	proxyAgentsClient proxy.ClientSet,
-	kubeconfigIssuer utils.KubeConfigIssuer) *AgentController {
+	certificateIssuer certs.CertificateIssuer) *AgentController {
 	v := &AgentController{
 		agentClient:       client,
 		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "agent"),
 		workerLoopPeriod:  time.Second,
-		proxyAgentsClient: proxyAgentsClient,
-		kubeconfigIssuer:  kubeconfigIssuer,
+		certificateIssuer: certificateIssuer,
 	}
 
 	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -142,12 +139,6 @@ func (c *AgentController) syncAgent(key string) error {
 	agent, err := c.agentLister.Agents(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Agent has been deleted, need to notify proxy
-			err = c.proxyAgentsClient.Delete(name)
-			if err != nil {
-				klog.Errorf("Failed to remove %s/%s from proxy agents list", namespace, name)
-				return err
-			}
 			return nil
 		}
 		klog.Error(err)
@@ -156,8 +147,9 @@ func (c *AgentController) syncAgent(key string) error {
 
 	klog.V(2).Info("New agent added, needed to prepare...", agent.Name)
 
+	newAgent := agent.DeepCopy()
 	// filled spec if not specified
-	if agent.Spec.KubernetesAPIServerPort == 0 {
+	if agent.Spec.KubernetesAPIServerPort == 0 || agent.Spec.KubeSphereAPIGatewayPort == 0 {
 		port, err := c.allocatePort()
 		if err != nil {
 			klog.Error(err)
@@ -166,11 +158,15 @@ func (c *AgentController) syncAgent(key string) error {
 
 		agent.Spec.KubernetesAPIServerPort = port
 		agent.Spec.KubeSphereAPIGatewayPort = port + 10000
-		agent.Spec.Token = c.generateToken()
+	}
 
-		if agent.Status.Conditions == nil {
-			agent.Status.Conditions = make([]v1alpha1.AgentCondition, 0)
-		}
+	// token uninitialized, generate a new token
+	if len(agent.Spec.Token) == 0 {
+		agent.Spec.Token = c.generateToken()
+	}
+
+	if agent.Status.Conditions == nil {
+		agent.Status.Conditions = make([]v1alpha1.AgentCondition, 0)
 
 		initializedCondition := v1alpha1.AgentCondition{
 			Type:               v1alpha1.AgentInitialized,
@@ -182,27 +178,25 @@ func (c *AgentController) syncAgent(key string) error {
 		}
 
 		agent.Status.Conditions = append(agent.Status.Conditions, initializedCondition)
+	}
 
-		// Issue kubeconfig
-		config, err := c.kubeconfigIssuer.IssueKubeConfig("kubernetes", port)
+	// kubeConfig not issued
+	if len(agent.Status.KubeConfig) == 0 {
+		// Issue kubeConfig
+		config, err := c.certificateIssuer.IssueKubeConfig("kubernetes", agent.Spec.KubernetesAPIServerPort)
 		if err != nil {
 			klog.Error(err)
 			return err
 		}
 		agent.Status.KubeConfig = config
+	}
 
+	if !reflect.DeepEqual(agent, newAgent) {
 		_, err = c.agentClient.TowerV1alpha1().Agents(agent.Namespace).Update(agent)
 		if err != nil {
 			klog.Error(err)
 			return err
 		}
-	}
-
-	// notify proxy
-	err = c.proxyAgentsClient.Add(agent)
-	if err != nil {
-		klog.Error("Unable to add agent to proxy agents list", err)
-		return err
 	}
 
 	return nil
@@ -225,6 +219,8 @@ func (c *AgentController) handleError(err error, key interface{}) {
 	utilruntime.HandleError(err)
 }
 
+// allocatePort find a available port between [portRangeMin, portRangeMax] in maximumRetries
+// TODO: only works with handful clusters
 func (c *AgentController) allocatePort() (uint16, error) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -253,6 +249,7 @@ func (c *AgentController) allocatePort() (uint16, error) {
 	return 0, fmt.Errorf("unable to allocate port after %d retries", maximumRetries)
 }
 
+// generateToken returns a random 32-byte string as token
 func (c *AgentController) generateToken() string {
 	rand.Seed(time.Now().UnixNano())
 	b := make([]byte, 32)

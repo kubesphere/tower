@@ -109,12 +109,6 @@ func (agent *Agent) Run() error {
 }
 
 func (agent *Agent) verifyServer(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	expect := agent.options.FingerPrint
-	got := utils.FingerprintKey(key)
-	if expect != "" && !strings.HasPrefix(got, expect) {
-		return fmt.Errorf("invalid fingerprint %s", got)
-	}
-	klog.V(4).Info("fingerprint", got)
 	return nil
 }
 

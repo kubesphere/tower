@@ -2,16 +2,14 @@ package proxy
 
 type Options struct {
 	// Certificates to setup a proxy server.
-	CaCert     string
-	CaKey      string
-	ServerCert string
-	ServerKey  string
+	CaCert string
+	CaKey  string
 	// Port listening for agent connections.
 	Host string
-	Port uint16
+	Port int
 	// Path to kubeconfig
-	KubeconfigPath string
+	KubeConfigPath string
 
 	// TODO: fill automatically
-	ProxyServiceHost string
+	PublishServiceAddress string
 }

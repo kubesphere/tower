@@ -2,18 +2,28 @@ package proxy
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
 	"kubesphere.io/tower/pkg/agent"
 	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
+	towerinformers "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -27,39 +37,65 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+//
 type Proxy struct {
-	httpServer  *HTTPServer
-	sessCount   int32
-	sessions    *utils.Agents
-	sshConfig   *ssh.ServerConfig
-	fingerprint string
-	options     *Options
-	clientSet   clientset.Interface
+	httpServer *HTTPServer
+	sessions   *utils.Agents
+	sshConfig  *ssh.ServerConfig
+
+	host string
+	port int
+
+	caCert     []byte
+	caKey      []byte
+	serverCert []byte
+	serverKey  []byte
+
+	agentClient clientset.Interface
+	agentSynced cache.InformerSynced
 }
 
-func NewServer(options *Options, client clientset.Interface) (*Proxy, error) {
+func NewServer(options *Options, agentInformer towerinformers.AgentInformer, client clientset.Interface) (*Proxy, error) {
+
 	s := &Proxy{
-		httpServer: NewHTTPServer(),
-		sessCount:  0,
-		sessions:   utils.NewAgents(),
-		options:    options,
-		clientSet:  client,
+		httpServer:  NewHTTPServer(),
+		sessions:    utils.NewAgents(),
+		host:        options.Host,
+		port:        options.Port,
+		agentClient: client,
 	}
 
-	key, _ := utils.GenerateKey("kubesphere")
+	key, _ := generateKey()
 	private, err := ssh.ParsePrivateKey(key)
 	if err != nil {
-		klog.Fatal("failed to parse key", private)
+		klog.Fatalf("Failed to parse key %v", err)
 	}
-
-	s.fingerprint = utils.FingerprintKey(private.PublicKey())
-
 	s.sshConfig = &ssh.ServerConfig{
 		ServerVersion:    "SSH-" + version.ProtocolVersion + "-server",
 		PasswordCallback: s.authenticate,
 	}
-
 	s.sshConfig.AddHostKey(private)
+
+	s.caCert, s.caKey = loadCertificateOrDie(options.CaCert), loadCertificateOrDie(options.CaKey)
+
+	certificateIssuer, err := certs.NewSimpleCertificateIssuer(options.CaCert, options.CaKey, "")
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	s.serverCert, s.serverKey, err = certificateIssuer.IssueCertAndKey()
+	if err != nil {
+		klog.Fatalf("Failed to issue server certificate %v", err)
+	}
+
+	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: s.addAgent,
+		UpdateFunc: func(old, new interface{}) {
+			s.addAgent(new)
+		},
+		DeleteFunc: s.delete,
+	})
+	s.agentSynced = agentInformer.Informer().HasSynced
 
 	return s, nil
 }
@@ -139,7 +175,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIGatewayPort, c, s.options.CaCert, s.options.ServerCert, s.options.ServerKey)
+	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIGatewayPort, c, s.caCert, s.serverCert, s.serverKey)
 	if err := proxy.Start(ctx); err != nil {
 		failed(err)
 		return
@@ -157,7 +193,12 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Proxy) Run(stopCh <-chan struct{}) error {
-	if err := s.Start(s.options.Host, strconv.Itoa(int(s.options.Port))); err != nil {
+
+	if !cache.WaitForCacheSync(stopCh, s.agentSynced) {
+		return fmt.Errorf("failed to wait for caches to sync")
+	}
+
+	if err := s.Start(s.host, strconv.Itoa(s.port)); err != nil {
 		return err
 	}
 
@@ -165,7 +206,6 @@ func (s *Proxy) Run(stopCh <-chan struct{}) error {
 }
 
 func (s *Proxy) Start(host, port string) error {
-	klog.V(0).Infof("Fingerprint %s", s.fingerprint)
 	klog.V(0).Infof("Listening on %s:%s...", host, port)
 
 	h := http.Handler(http.HandlerFunc(s.handleClientHandler))
@@ -221,23 +261,29 @@ func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissi
 	return nil, nil
 }
 
-func (s *Proxy) Add(agent *v1alpha1.Agent) error {
-	s.sessions.Add(agent)
-	return nil
+func (s *Proxy) addAgent(obj interface{}) {
+	agt := obj.(*v1alpha1.Agent)
+	// skip uninitialized agent
+	if agt.Spec.KubernetesAPIServerPort == 0 || agt.Spec.KubeSphereAPIGatewayPort == 0 || len(agt.Spec.Token) == 0 {
+		return
+	}
+
+	s.sessions.Add(agt)
 }
 
-func (s *Proxy) Delete(name string) error {
-	_, found := s.sessions.Get(name)
-	if !found {
-		return fmt.Errorf("agent %s not found", name)
-	}
-	s.sessions.Del(name)
+func (s *Proxy) delete(obj interface{}) {
+	agt := obj.(*v1alpha1.Agent)
 
-	return nil
+	_, found := s.sessions.Get(agt.Name)
+	if !found {
+		return
+	}
+	s.sessions.Del(agt.Name)
+
 }
 
 func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
-	agent, err := s.clientSet.TowerV1alpha1().Agents(agent.Namespace).Get(agent.Name, v1.GetOptions{})
+	agt, err := s.agentClient.TowerV1alpha1().Agents(agent.Namespace).Get(agent.Name, v1.GetOptions{})
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -258,7 +304,7 @@ func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 	}
 
 	newConditions := make([]v1alpha1.AgentCondition, 0)
-	for _, condition := range agent.Status.Conditions {
+	for _, condition := range agt.Status.Conditions {
 		if condition.Type == v1alpha1.AgentConnected {
 			continue
 		}
@@ -266,11 +312,37 @@ func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 	}
 	newConditions = append(newConditions, statusCondition)
 
-	agent, err = s.clientSet.TowerV1alpha1().Agents(agent.Namespace).UpdateStatus(agent)
+	agent, err = s.agentClient.TowerV1alpha1().Agents(agent.Namespace).UpdateStatus(agent)
 	if err != nil {
 		klog.Error(err)
 		return err
 	}
 
 	return nil
+}
+
+func pathForCert(directory, name string) string {
+	return filepath.Join(directory, name)
+}
+
+func generateKey() ([]byte, error) {
+	r := rand.Reader
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), r)
+	if err != nil {
+		return nil, err
+	}
+	b, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal ECDSA private key: %v", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: b}), nil
+}
+
+func loadCertificateOrDie(path string) []byte {
+	cert, err := ioutil.ReadFile(path)
+	if err != nil {
+		klog.Fatalf("error loading certificate %s, %v", path, err)
+	}
+	return cert
 }

@@ -5,6 +5,9 @@
 *.so
 *.dylib
 
+# Idea
+.idea
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -16,3 +19,4 @@
 
 # output 
 bin/
+

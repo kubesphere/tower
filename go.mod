@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.4.0
 	github.com/jpillora/ansi v1.0.2 // indirect
 	github.com/jpillora/backoff v1.0.0
-	github.com/jpillora/requestlog v1.0.0
+	github.com/jpillora/requestlog v1.0.0 // indirect
 	github.com/jpillora/sizestr v1.0.0 // indirect
 	github.com/keybase/go-ps v0.0.0-20190827175125-91aafc93ba19 // indirect
 	github.com/pkg/errors v0.8.1
