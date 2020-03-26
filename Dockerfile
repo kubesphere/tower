@@ -26,6 +26,5 @@ WORKDIR /
 COPY --from=builder /workspace/proxy .
 COPY --from=builder /workspace/agent .
 COPY --from=builder /workspace/certs .
-USER nonroot:nonroot
 
 ENTRYPOINT ["sh"]
