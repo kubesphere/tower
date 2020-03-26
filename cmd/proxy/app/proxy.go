@@ -56,10 +56,13 @@ func NewProxyCommand() *cobra.Command {
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)
-			err = agentController.Start(stopCh)
-			if err != nil {
-				return err
-			}
+
+			go func() {
+				err = agentController.Run(1, stopCh)
+				if err != nil {
+					klog.Fatal(err)
+				}
+			}()
 
 			if err := p.Run(stopCh); err != nil {
 				return err
