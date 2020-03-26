@@ -10,6 +10,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
+	"net"
 	"time"
 )
 
@@ -18,6 +19,8 @@ const (
 	defaultCommonName     = "Tower"
 	defaultOrganization   = "KubeSphere"
 )
+
+var defaultAltNamesDNS = []string{"kubernetes", "kubernetes.default", "kubernetes.default.svc"}
 
 type clientCertAuth struct {
 	CAKey         crypto.Signer
@@ -147,7 +150,7 @@ func BuildKubeConfigFromSpec(spec *KubeConfigSpec, clustername string) (*clientc
 }
 
 type CertificateIssuer interface {
-	IssueCertAndKey() ([]byte, []byte, error)
+	IssueCertAndKey(ip string, dnsNames ...string) ([]byte, []byte, error)
 	IssueKubeConfig(clusterName string, proxyPort uint16) ([]byte, error)
 }
 
@@ -189,11 +192,26 @@ func (s *simpleCertificateIssuer) IssueKubeConfig(clusterName string, port uint1
 	return clientcmd.Write(*config)
 }
 
-func (s *simpleCertificateIssuer) IssueCertAndKey() ([]byte, []byte, error) {
+// IssueCertAndKey issues certificate and key,
+func (s *simpleCertificateIssuer) IssueCertAndKey(ip string, dns ...string) ([]byte, []byte, error) {
+	altNames := certutil.AltNames{
+		DNSNames: defaultAltNamesDNS,
+		IPs:      make([]net.IP, 0),
+	}
+
+	if len(dns) != 0 {
+		altNames.DNSNames = append(altNames.DNSNames, dns...)
+	}
+
+	if len(ip) != 0 {
+		altNames.IPs = append(altNames.IPs, net.ParseIP(ip))
+	}
+
 	clientCertConfig := certutil.Config{
 		CommonName:   defaultCommonName,
 		Organization: []string{defaultOrganization},
 		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		AltNames:     altNames,
 	}
 	clientCert, clientKey, err := NewCertAndKey(s.cert, s.signer, &clientCertConfig)
 	if err != nil {

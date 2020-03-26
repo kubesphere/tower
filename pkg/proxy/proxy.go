@@ -83,7 +83,7 @@ func NewServer(options *Options, agentInformer towerinformers.AgentInformer, cli
 		klog.Fatal(err)
 	}
 
-	s.serverCert, s.serverKey, err = certificateIssuer.IssueCertAndKey()
+	s.serverCert, s.serverKey, err = certificateIssuer.IssueCertAndKey(options.PublishServiceAddress, options.PublishServiceAddress)
 	if err != nil {
 		klog.Fatalf("Failed to issue server certificate %v", err)
 	}
