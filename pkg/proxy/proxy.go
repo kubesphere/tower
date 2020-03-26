@@ -12,8 +12,10 @@ import (
 	"github.com/gorilla/websocket"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 	"kubesphere.io/tower/pkg/agent"
 	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
@@ -23,7 +25,6 @@ import (
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -108,7 +109,7 @@ func (s *Proxy) handleClientHandler(w http.ResponseWriter, r *http.Request) {
 			s.handleWebsocket(w, r)
 			return
 		}
-		klog.V(4).Infof("ignoring client connection using protocol '%s', expected '%s'", protocol, version.ProtocolVersion)
+		klog.V(4).Infof("Ignoring client connection using protocol '%s', expected '%s'", protocol, version.ProtocolVersion)
 	}
 
 	switch r.URL.String() {
@@ -125,23 +126,23 @@ func (s *Proxy) handleClientHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
-	klog.V(4).Info("new agent connection")
+	klog.V(4).Info("New agent connection")
 	wsConn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		klog.Error("failed to upgrade connection", err)
+		klog.Error("Failed to upgrade connection", err)
 		return
 	}
 	connection := utils.NewWebSocketConn(wsConn)
 
-	klog.V(4).Info("handshaking...")
+	klog.V(4).Info("Handshaking...")
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(connection, s.sshConfig)
 	if err != nil {
-		klog.Error("failed to handshake", err)
+		klog.Error("Failed to handshake", err)
 		return
 	}
 
-	klog.V(4).Info("verifying configuration")
+	klog.V(4).Info("Verifying configuration")
 	var r *ssh.Request
 	select {
 	case r = <-reqs:
@@ -163,7 +164,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	c := &agent.Config{}
 	err = c.Unmarshal(r.Payload)
 	if err != nil {
-		klog.Error("unable to unmarshal config from agent", r.Payload)
+		klog.Error("Unable to unmarshal config from agent", r.Payload)
 		return
 	}
 
@@ -182,14 +183,19 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	}
 
 	r.Reply(true, nil)
-	klog.V(4).Info("connection established")
-	s.Update(client, true)
+	klog.V(0).Infof("Connection established with %s", client.Name)
+	retry.OnError(retry.DefaultBackoff, apierrors.IsConflict, func() error {
+		return s.Update(client, true)
+	})
 
 	go s.handleSSHRequests(reqs)
 	go s.handleSSHChannels(chans)
 	sshConn.Wait()
-	klog.V(4).Info("connection closed")
-	s.Update(client, false)
+	klog.V(0).Infof("Connection closed with %s", client.Name)
+	retry.OnError(retry.DefaultBackoff, apierrors.IsConflict, func() error {
+		return s.Update(client, false)
+	})
+
 }
 
 func (s *Proxy) Run(stopCh <-chan struct{}) error {
@@ -257,7 +263,7 @@ func (s *Proxy) handleSSHChannels(chans <-chan ssh.NewChannel) {
 }
 
 func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-	klog.V(4).Infof("%s with session %s from %s", c.User(), string(c.SessionID()), c.RemoteAddr())
+	klog.V(4).Infof("%s is connecting from %s", c.User(), c.RemoteAddr())
 	return nil, nil
 }
 
@@ -282,7 +288,9 @@ func (s *Proxy) delete(obj interface{}) {
 
 }
 
+//
 func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
+
 	agt, err := s.agentClient.TowerV1alpha1().Agents(agent.Namespace).Get(agent.Name, v1.GetOptions{})
 	if err != nil {
 		klog.Error(err)
@@ -311,18 +319,15 @@ func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 		newConditions = append(newConditions, condition)
 	}
 	newConditions = append(newConditions, statusCondition)
+	agt.Status.Conditions = newConditions
 
-	agent, err = s.agentClient.TowerV1alpha1().Agents(agent.Namespace).UpdateStatus(agent)
+	agt, err = s.agentClient.TowerV1alpha1().Agents(agt.Namespace).Update(agt)
 	if err != nil {
 		klog.Error(err)
 		return err
 	}
 
 	return nil
-}
-
-func pathForCert(directory, name string) string {
-	return filepath.Join(directory, name)
 }
 
 func generateKey() ([]byte, error) {
