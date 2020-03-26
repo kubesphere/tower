@@ -86,7 +86,7 @@ func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port ui
 
 		// if server ca is given, client certificate are required
 		server.TLSConfig.ClientCAs = serverCaCertPool
-		server.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		server.TLSConfig.ClientAuth = tls.RequestClientCert
 		server.TLSConfig.VerifyPeerCertificate = verifyClientCertificate
 	}
 
@@ -115,6 +115,7 @@ func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port ui
 	}, nil
 }
 
+// TODO: verify issued client certificate
 func verifyClientCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	//klog.V(0).Info(rawCerts, verifiedChains)
 	return nil

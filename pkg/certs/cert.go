@@ -210,7 +210,7 @@ func (s *simpleCertificateIssuer) IssueCertAndKey(ip string, dns ...string) ([]b
 	clientCertConfig := certutil.Config{
 		CommonName:   defaultCommonName,
 		Organization: []string{defaultOrganization},
-		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		Usages:       []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		AltNames:     altNames,
 	}
 	clientCert, clientKey, err := NewCertAndKey(s.cert, s.signer, &clientCertConfig)
