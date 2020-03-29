@@ -29,13 +29,24 @@ type AgentSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Token used by agents to connect to proxy.
+	// +optional
 	Token string `json:"token,omitempty"`
 
+	// Proxy address
+	// +optional
+	Proxy string `json:"proxy,omitempty"`
+
 	// KubeAPIServerPort is the port which listens for forwarding kube-apiserver traffic
+	// +optional
 	KubernetesAPIServerPort uint16 `json:"kubernetesAPIServerPort,omitempty"`
 
 	// KubeSphereAPIServerPort is the port which listens for forwarding kubesphere apigateway traffic
-	KubeSphereAPIGatewayPort uint16 `json:"kubesphereAPIServerPort,omitempty"`
+	// +optional
+	KubeSphereAPIServerPort uint16 `json:"kubesphereAPIServerPort,omitempty"`
+
+	// Indicates that the agent is paused.
+	// +optional
+	Paused bool
 }
 
 type AgentConditionType string

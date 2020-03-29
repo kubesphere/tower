@@ -50,7 +50,7 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=tower, Version=v1alpha1
+	// Group=tower.kubesphere.io, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("agents"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Tower().V1alpha1().Agents().Informer()}, nil
 

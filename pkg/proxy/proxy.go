@@ -176,7 +176,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIGatewayPort, c, s.caCert, s.serverCert, s.serverKey)
+	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIServerPort, c, s.caCert, s.serverCert, s.serverKey)
 	if err := proxy.Start(ctx); err != nil {
 		failed(err)
 		return
@@ -269,8 +269,14 @@ func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissi
 
 func (s *Proxy) addAgent(obj interface{}) {
 	agt := obj.(*v1alpha1.Agent)
+
+	if agt.Spec.Paused {
+		s.delete(obj)
+		return
+	}
+
 	// skip uninitialized agent
-	if agt.Spec.KubernetesAPIServerPort == 0 || agt.Spec.KubeSphereAPIGatewayPort == 0 || len(agt.Spec.Token) == 0 {
+	if agt.Spec.KubernetesAPIServerPort == 0 || agt.Spec.KubeSphereAPIServerPort == 0 || len(agt.Spec.Token) == 0 {
 		return
 	}
 
@@ -285,7 +291,6 @@ func (s *Proxy) delete(obj interface{}) {
 		return
 	}
 	s.sessions.Del(agt.Name)
-
 }
 
 //

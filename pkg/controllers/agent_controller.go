@@ -46,16 +46,20 @@ type AgentController struct {
 	workerLoopPeriod time.Duration
 
 	certificateIssuer certs.CertificateIssuer
+
+	publicServiceAddress string
 }
 
 func NewAgentController(agentInformer towerinformers.AgentInformer,
 	client clientset.Interface,
-	certificateIssuer certs.CertificateIssuer) *AgentController {
+	certificateIssuer certs.CertificateIssuer,
+	publicServiceAddress string) *AgentController {
 	v := &AgentController{
-		agentClient:       client,
-		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "agent"),
-		workerLoopPeriod:  time.Second,
-		certificateIssuer: certificateIssuer,
+		agentClient:          client,
+		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "agent"),
+		workerLoopPeriod:     time.Second,
+		certificateIssuer:    certificateIssuer,
+		publicServiceAddress: publicServiceAddress,
 	}
 
 	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -145,11 +149,17 @@ func (c *AgentController) syncAgent(key string) error {
 		return err
 	}
 
+	// agent paused, skip
+	if agent.Spec.Paused {
+		klog.V(4).Infof("Agent %s/%s is paused, skipping", agent.Namespace, agent.Name)
+		return nil
+	}
+
 	klog.V(2).Info("New agent added, needed to prepare...", agent.Name)
 
 	newAgent := agent.DeepCopy()
 	// filled spec if not specified
-	if agent.Spec.KubernetesAPIServerPort == 0 || agent.Spec.KubeSphereAPIGatewayPort == 0 {
+	if agent.Spec.KubernetesAPIServerPort == 0 || agent.Spec.KubeSphereAPIServerPort == 0 {
 		port, err := c.allocatePort()
 		if err != nil {
 			klog.Error(err)
@@ -157,7 +167,7 @@ func (c *AgentController) syncAgent(key string) error {
 		}
 
 		agent.Spec.KubernetesAPIServerPort = port
-		agent.Spec.KubeSphereAPIGatewayPort = port + 10000
+		agent.Spec.KubeSphereAPIServerPort = port + 10000
 	}
 
 	// token uninitialized, generate a new token
@@ -180,8 +190,10 @@ func (c *AgentController) syncAgent(key string) error {
 		agent.Status.Conditions = append(agent.Status.Conditions, initializedCondition)
 	}
 
-	// kubeConfig not issued
-	if len(agent.Status.KubeConfig) == 0 {
+	// issue new kubeConfig whenever agent's proxy address changed
+	if agent.Spec.Proxy != c.publicServiceAddress || len(agent.Status.KubeConfig) == 0 {
+		agent.Spec.Proxy = c.publicServiceAddress
+
 		// Issue kubeConfig
 		config, err := c.certificateIssuer.IssueKubeConfig("kubernetes", agent.Spec.KubernetesAPIServerPort)
 		if err != nil {
