@@ -52,7 +52,7 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, certificateIssuer)
+			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)

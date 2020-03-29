@@ -24,9 +24,9 @@ func FakeAgents() *Agents {
 			Name: "alpha",
 		},
 		Spec: v1alpha1.AgentSpec{
-			Token:                    "abcedefg",
-			KubernetesAPIServerPort:  6443,
-			KubeSphereAPIGatewayPort: 6444,
+			Token:                   "abcedefg",
+			KubernetesAPIServerPort: 6443,
+			KubeSphereAPIServerPort: 16443,
 		},
 	}
 

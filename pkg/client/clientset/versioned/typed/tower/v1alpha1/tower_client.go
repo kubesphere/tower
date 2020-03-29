@@ -27,7 +27,7 @@ type TowerV1alpha1Interface interface {
 	AgentsGetter
 }
 
-// TowerV1alpha1Client is used to interact with features provided by the tower group.
+// TowerV1alpha1Client is used to interact with features provided by the tower.kubesphere.io group.
 type TowerV1alpha1Client struct {
 	restClient rest.Interface
 }
