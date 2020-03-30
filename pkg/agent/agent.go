@@ -79,6 +79,7 @@ func NewAgent(options *Options) (*Agent, error) {
 
 		conf.CAData = ca
 		conf.BearerToken = token
+		conf.KubernetesSvcHost = fmt.Sprintf("%s:%s", host, port)
 	}
 
 	agent := &Agent{
