@@ -66,7 +66,7 @@ func TestIssuerKubeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = certificateIssuer.IssueKubeConfig("kubernetes", 6443)
+	_, err = certificateIssuer.IssueKubeConfig("kubernetes", "0.0.0.0", 6443)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,8 +6,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
@@ -33,10 +35,16 @@ const (
 	// kubesphereAPIServer port is defaulted to kubernetesAPIServerPort + 10000
 	portRangeMin = 6000
 	portRangeMax = 7000
+
+	// Service port
+	kubernetesPort = 6443
+	kubespherePort = 80
 )
 
 type AgentController struct {
 	agentClient clientset.Interface
+
+	serviceClient kubernetes.Interface
 
 	agentLister towerlisters.AgentLister
 	agentSynced cache.InformerSynced
@@ -52,6 +60,7 @@ type AgentController struct {
 
 func NewAgentController(agentInformer towerinformers.AgentInformer,
 	client clientset.Interface,
+	serviceClient kubernetes.Interface,
 	certificateIssuer certs.CertificateIssuer,
 	publicServiceAddress string) *AgentController {
 	v := &AgentController{
@@ -60,6 +69,7 @@ func NewAgentController(agentInformer towerinformers.AgentInformer,
 		workerLoopPeriod:     time.Second,
 		certificateIssuer:    certificateIssuer,
 		publicServiceAddress: publicServiceAddress,
+		serviceClient:        serviceClient,
 	}
 
 	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -175,6 +185,61 @@ func (c *AgentController) syncAgent(key string) error {
 		agent.Spec.Token = c.generateToken()
 	}
 
+	serviceName := fmt.Sprintf("mc-%s", agent.Name)
+
+	mcService := corev1.Service{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: agent.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name": serviceName,
+				"app":                    serviceName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/name": "tower",
+				"app":                    "tower",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "kubernetes",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       kubernetesPort,
+					TargetPort: intstr.FromInt(int(agent.Spec.KubernetesAPIServerPort)),
+				},
+				{
+					Name:       "kubesphere",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       kubespherePort,
+					TargetPort: intstr.FromInt(int(agent.Spec.KubeSphereAPIServerPort)),
+				},
+			},
+		},
+	}
+
+	service, err := c.serviceClient.CoreV1().Services(agent.Namespace).Get(serviceName, v1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			service, err = c.serviceClient.CoreV1().Services(agent.Namespace).Create(&mcService)
+			if err != nil {
+				return err
+			}
+		}
+
+		return err
+	}
+
+	if !reflect.DeepEqual(service.Spec, mcService.Spec) {
+		mcService.Annotations = service.Annotations
+		mcService.Spec.ClusterIP = service.Spec.ClusterIP
+
+		service, err = c.serviceClient.CoreV1().Services(agent.Namespace).Update(&mcService)
+		if err != nil {
+			return err
+		}
+	}
+
 	if agent.Status.Conditions == nil {
 		agent.Status.Conditions = make([]v1alpha1.AgentCondition, 0)
 
@@ -191,11 +256,11 @@ func (c *AgentController) syncAgent(key string) error {
 	}
 
 	// issue new kubeConfig whenever agent's proxy address changed
-	if agent.Spec.Proxy != c.publicServiceAddress || len(agent.Status.KubeConfig) == 0 {
-		agent.Spec.Proxy = c.publicServiceAddress
+	if agent.Spec.Proxy != fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubernetesPort) || len(agent.Status.KubeConfig) == 0 {
+		agent.Spec.Proxy = fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubernetesPort)
 
 		// Issue kubeConfig
-		config, err := c.certificateIssuer.IssueKubeConfig("kubernetes", agent.Spec.KubernetesAPIServerPort)
+		config, err := c.certificateIssuer.IssueKubeConfig(agent.Name, service.Spec.ClusterIP, kubernetesPort)
 		if err != nil {
 			klog.Error(err)
 			return err
