@@ -231,7 +231,7 @@ func (c *AgentController) syncAgent(key string) error {
 	}
 
 	if !reflect.DeepEqual(service.Spec, mcService.Spec) {
-		mcService.Annotations = service.Annotations
+		mcService.ObjectMeta = service.ObjectMeta
 		mcService.Spec.ClusterIP = service.Spec.ClusterIP
 
 		service, err = c.serviceClient.CoreV1().Services(agent.Namespace).Update(&mcService)
