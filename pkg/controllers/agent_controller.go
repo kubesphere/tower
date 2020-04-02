@@ -256,8 +256,8 @@ func (c *AgentController) syncAgent(key string) error {
 	}
 
 	// issue new kubeConfig whenever agent's proxy address changed
-	if agent.Spec.Proxy != fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubernetesPort) || len(agent.Status.KubeConfig) == 0 {
-		agent.Spec.Proxy = fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubernetesPort)
+	if agent.Spec.Proxy != fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubespherePort) || len(agent.Status.KubeConfig) == 0 {
+		agent.Spec.Proxy = fmt.Sprintf("%s:%d", service.Spec.ClusterIP, kubespherePort)
 
 		// Issue kubeConfig
 		config, err := c.certificateIssuer.IssueKubeConfig(agent.Name, service.Spec.ClusterIP, kubernetesPort)
