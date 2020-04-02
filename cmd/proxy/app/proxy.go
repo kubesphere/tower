@@ -3,6 +3,7 @@ package app
 import (
 	"flag"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"kubesphere.io/tower/pkg/certs"
@@ -35,6 +36,11 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
+			serviceClient, err := kubernetes.NewForConfig(config)
+			if err != nil {
+				return err
+			}
+
 			agentsClient, err := clientset.NewForConfig(config)
 			if err != nil {
 				return err
@@ -52,7 +58,7 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
+			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, serviceClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)
