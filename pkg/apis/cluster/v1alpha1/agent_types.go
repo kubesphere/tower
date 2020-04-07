@@ -46,7 +46,7 @@ type AgentSpec struct {
 
 	// Indicates that the agent is paused.
 	// +optional
-	Paused bool
+	Paused bool `json:"paused,omitempty"`
 }
 
 type AgentConditionType string
@@ -86,7 +86,7 @@ type AgentStatus struct {
 	Ping uint64 `json:"ping,omitempty"`
 
 	// Issued new kubeconfig by proxy server
-	KubeConfig []byte
+	KubeConfig []byte `json:"kubeconfig,omitempty"`
 }
 
 // +genclient

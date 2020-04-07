@@ -23,10 +23,10 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	towerv1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	clusterv1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	versioned "kubesphere.io/tower/pkg/client/clientset/versioned"
 	internalinterfaces "kubesphere.io/tower/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "kubesphere.io/tower/pkg/client/listers/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/client/listers/cluster/v1alpha1"
 )
 
 // AgentInformer provides access to a shared informer and lister for
@@ -59,16 +59,16 @@ func NewFilteredAgentInformer(client versioned.Interface, namespace string, resy
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TowerV1alpha1().Agents(namespace).List(options)
+				return client.ClusterV1alpha1().Agents(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TowerV1alpha1().Agents(namespace).Watch(options)
+				return client.ClusterV1alpha1().Agents(namespace).Watch(options)
 			},
 		},
-		&towerv1alpha1.Agent{},
+		&clusterv1alpha1.Agent{},
 		resyncPeriod,
 		indexers,
 	)
@@ -79,7 +79,7 @@ func (f *agentInformer) defaultInformer(client versioned.Interface, resyncPeriod
 }
 
 func (f *agentInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&towerv1alpha1.Agent{}, f.defaultInformer)
+	return f.factory.InformerFor(&clusterv1alpha1.Agent{}, f.defaultInformer)
 }
 
 func (f *agentInformer) Lister() v1alpha1.AgentLister {

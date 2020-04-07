@@ -26,8 +26,8 @@ import (
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 	versioned "kubesphere.io/tower/pkg/client/clientset/versioned"
+	cluster "kubesphere.io/tower/pkg/client/informers/externalversions/cluster"
 	internalinterfaces "kubesphere.io/tower/pkg/client/informers/externalversions/internalinterfaces"
-	tower "kubesphere.io/tower/pkg/client/informers/externalversions/tower"
 )
 
 // SharedInformerOption defines the functional option type for SharedInformerFactory.
@@ -170,9 +170,9 @@ type SharedInformerFactory interface {
 	ForResource(resource schema.GroupVersionResource) (GenericInformer, error)
 	WaitForCacheSync(stopCh <-chan struct{}) map[reflect.Type]bool
 
-	Tower() tower.Interface
+	Cluster() cluster.Interface
 }
 
-func (f *sharedInformerFactory) Tower() tower.Interface {
-	return tower.New(f, f.namespace, f.tweakListOptions)
+func (f *sharedInformerFactory) Cluster() cluster.Interface {
+	return cluster.New(f, f.namespace, f.tweakListOptions)
 }

@@ -48,7 +48,7 @@ func NewProxyCommand() *cobra.Command {
 
 			agentsInformerFactory := informers.NewSharedInformerFactory(agentsClient, 10*time.Minute)
 
-			p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient)
+			p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Agents(), agentsClient)
 			if err != nil {
 				return err
 			}
@@ -58,7 +58,7 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			agentController := controllers.NewAgentController(agentsInformerFactory.Tower().V1alpha1().Agents(), agentsClient, serviceClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
+			agentController := controllers.NewAgentController(agentsInformerFactory.Cluster().V1alpha1().Agents(), agentsClient, serviceClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)

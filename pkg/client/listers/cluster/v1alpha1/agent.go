@@ -20,7 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
-	v1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 )
 
 // AgentLister helps list Agents.

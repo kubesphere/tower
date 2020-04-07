@@ -23,18 +23,18 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	v1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 )
 
 // FakeAgents implements AgentInterface
 type FakeAgents struct {
-	Fake *FakeTowerV1alpha1
+	Fake *FakeClusterV1alpha1
 	ns   string
 }
 
-var agentsResource = schema.GroupVersionResource{Group: "tower.kubesphere.io", Version: "v1alpha1", Resource: "agents"}
+var agentsResource = schema.GroupVersionResource{Group: "cluster.kubesphere.io", Version: "v1alpha1", Resource: "agents"}
 
-var agentsKind = schema.GroupVersionKind{Group: "tower.kubesphere.io", Version: "v1alpha1", Kind: "Agent"}
+var agentsKind = schema.GroupVersionKind{Group: "cluster.kubesphere.io", Version: "v1alpha1", Kind: "Agent"}
 
 // Get takes name of the agent, and returns the corresponding agent object, and an error if there is any.
 func (c *FakeAgents) Get(name string, options v1.GetOptions) (result *v1alpha1.Agent, err error) {
