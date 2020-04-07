@@ -23,8 +23,8 @@ import (
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	towerv1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/tower/v1alpha1"
-	faketowerv1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/tower/v1alpha1/fake"
+	clusterv1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/cluster/v1alpha1"
+	fakeclusterv1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/cluster/v1alpha1/fake"
 )
 
 // NewSimpleClientset returns a clientset that will respond with the provided objects.
@@ -74,7 +74,7 @@ func (c *Clientset) Tracker() testing.ObjectTracker {
 
 var _ clientset.Interface = &Clientset{}
 
-// TowerV1alpha1 retrieves the TowerV1alpha1Client
-func (c *Clientset) TowerV1alpha1() towerv1alpha1.TowerV1alpha1Interface {
-	return &faketowerv1alpha1.FakeTowerV1alpha1{Fake: &c.Fake}
+// ClusterV1alpha1 retrieves the ClusterV1alpha1Client
+func (c *Clientset) ClusterV1alpha1() clusterv1alpha1.ClusterV1alpha1Interface {
+	return &fakeclusterv1alpha1.FakeClusterV1alpha1{Fake: &c.Fake}
 }

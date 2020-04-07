@@ -13,11 +13,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
-	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	towerinformers "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
-	towerlisters "kubesphere.io/tower/pkg/client/listers/tower/v1alpha1"
+	agentinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
+	agentlisters "kubesphere.io/tower/pkg/client/listers/cluster/v1alpha1"
 	"math/rand"
 	"reflect"
 	"time"
@@ -46,7 +46,7 @@ type AgentController struct {
 
 	serviceClient kubernetes.Interface
 
-	agentLister towerlisters.AgentLister
+	agentLister agentlisters.AgentLister
 	agentSynced cache.InformerSynced
 
 	queue workqueue.RateLimitingInterface
@@ -58,7 +58,7 @@ type AgentController struct {
 	publicServiceAddress string
 }
 
-func NewAgentController(agentInformer towerinformers.AgentInformer,
+func NewAgentController(agentInformer agentinformers.AgentInformer,
 	client clientset.Interface,
 	serviceClient kubernetes.Interface,
 	certificateIssuer certs.CertificateIssuer,
@@ -269,7 +269,7 @@ func (c *AgentController) syncAgent(key string) error {
 	}
 
 	if !reflect.DeepEqual(agent, newAgent) {
-		_, err = c.agentClient.TowerV1alpha1().Agents(agent.Namespace).Update(agent)
+		_, err = c.agentClient.ClusterV1alpha1().Agents(agent.Namespace).Update(agent)
 		if err != nil {
 			klog.Error(err)
 			return err

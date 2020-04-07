@@ -18,26 +18,26 @@ package v1alpha1
 
 import (
 	rest "k8s.io/client-go/rest"
-	v1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/client/clientset/versioned/scheme"
 )
 
-type TowerV1alpha1Interface interface {
+type ClusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AgentsGetter
 }
 
-// TowerV1alpha1Client is used to interact with features provided by the tower.kubesphere.io group.
-type TowerV1alpha1Client struct {
+// ClusterV1alpha1Client is used to interact with features provided by the cluster.kubesphere.io group.
+type ClusterV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *TowerV1alpha1Client) Agents(namespace string) AgentInterface {
+func (c *ClusterV1alpha1Client) Agents(namespace string) AgentInterface {
 	return newAgents(c, namespace)
 }
 
-// NewForConfig creates a new TowerV1alpha1Client for the given config.
-func NewForConfig(c *rest.Config) (*TowerV1alpha1Client, error) {
+// NewForConfig creates a new ClusterV1alpha1Client for the given config.
+func NewForConfig(c *rest.Config) (*ClusterV1alpha1Client, error) {
 	config := *c
 	if err := setConfigDefaults(&config); err != nil {
 		return nil, err
@@ -46,12 +46,12 @@ func NewForConfig(c *rest.Config) (*TowerV1alpha1Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &TowerV1alpha1Client{client}, nil
+	return &ClusterV1alpha1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new TowerV1alpha1Client for the given config and
+// NewForConfigOrDie creates a new ClusterV1alpha1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *TowerV1alpha1Client {
+func NewForConfigOrDie(c *rest.Config) *ClusterV1alpha1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -59,9 +59,9 @@ func NewForConfigOrDie(c *rest.Config) *TowerV1alpha1Client {
 	return client
 }
 
-// New creates a new TowerV1alpha1Client for the given RESTClient.
-func New(c rest.Interface) *TowerV1alpha1Client {
-	return &TowerV1alpha1Client{c}
+// New creates a new ClusterV1alpha1Client for the given RESTClient.
+func New(c rest.Interface) *ClusterV1alpha1Client {
+	return &ClusterV1alpha1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) error {
@@ -79,7 +79,7 @@ func setConfigDefaults(config *rest.Config) error {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *TowerV1alpha1Client) RESTClient() rest.Interface {
+func (c *ClusterV1alpha1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

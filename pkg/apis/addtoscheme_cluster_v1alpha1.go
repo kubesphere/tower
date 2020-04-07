@@ -1,7 +1,7 @@
 package apis
 
 import (
-	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 )
 
 func init() {

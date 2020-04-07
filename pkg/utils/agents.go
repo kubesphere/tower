@@ -2,7 +2,7 @@ package utils
 
 import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"sync"
 )
 

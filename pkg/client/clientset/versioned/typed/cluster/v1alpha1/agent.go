@@ -23,7 +23,7 @@ import (
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	rest "k8s.io/client-go/rest"
-	v1alpha1 "kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	scheme "kubesphere.io/tower/pkg/client/clientset/versioned/scheme"
 )
 
@@ -54,7 +54,7 @@ type agents struct {
 }
 
 // newAgents returns a Agents
-func newAgents(c *TowerV1alpha1Client, namespace string) *agents {
+func newAgents(c *ClusterV1alpha1Client, namespace string) *agents {
 	return &agents{
 		client: c.RESTClient(),
 		ns:     namespace,

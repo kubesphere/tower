@@ -18,10 +18,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
 	"kubesphere.io/tower/pkg/agent"
-	"kubesphere.io/tower/pkg/apis/tower/v1alpha1"
+	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	towerinformers "kubesphere.io/tower/pkg/client/informers/externalversions/tower/v1alpha1"
+	agentinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
 	"net/http"
@@ -56,7 +56,7 @@ type Proxy struct {
 	agentSynced cache.InformerSynced
 }
 
-func NewServer(options *Options, agentInformer towerinformers.AgentInformer, client clientset.Interface) (*Proxy, error) {
+func NewServer(options *Options, agentInformer agentinformers.AgentInformer, client clientset.Interface) (*Proxy, error) {
 
 	s := &Proxy{
 		httpServer:  NewHTTPServer(),
@@ -296,7 +296,7 @@ func (s *Proxy) delete(obj interface{}) {
 //
 func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 
-	agt, err := s.agentClient.TowerV1alpha1().Agents(agent.Namespace).Get(agent.Name, v1.GetOptions{})
+	agt, err := s.agentClient.ClusterV1alpha1().Agents(agent.Namespace).Get(agent.Name, v1.GetOptions{})
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -326,7 +326,7 @@ func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 	newConditions = append(newConditions, statusCondition)
 	agt.Status.Conditions = newConditions
 
-	agt, err = s.agentClient.TowerV1alpha1().Agents(agt.Namespace).Update(agt)
+	agt, err = s.agentClient.ClusterV1alpha1().Agents(agt.Namespace).Update(agt)
 	if err != nil {
 		klog.Error(err)
 		return err

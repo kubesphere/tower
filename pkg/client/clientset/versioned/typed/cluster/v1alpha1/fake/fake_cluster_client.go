@@ -19,20 +19,20 @@ package fake
 import (
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
-	v1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/tower/v1alpha1"
+	v1alpha1 "kubesphere.io/tower/pkg/client/clientset/versioned/typed/cluster/v1alpha1"
 )
 
-type FakeTowerV1alpha1 struct {
+type FakeClusterV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeTowerV1alpha1) Agents(namespace string) v1alpha1.AgentInterface {
+func (c *FakeClusterV1alpha1) Agents(namespace string) v1alpha1.AgentInterface {
 	return &FakeAgents{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeTowerV1alpha1) RESTClient() rest.Interface {
+func (c *FakeClusterV1alpha1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }
