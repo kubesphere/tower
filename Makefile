@@ -50,7 +50,7 @@ manifests: controller-gen
 
 deepcopy:
 	#GO111MODULE=on go install -mod=vendor k8s.io/code-generator/cmd/deepcopy-gen
-	${GOPATH}/bin/deepcopy-gen -i github.com/zryfish/tower/pkg/apis/... -h ./hack/boilerplate.go.txt -O zz_generated.deepcopy
+	${GOPATH}/bin/deepcopy-gen -i kubesphere.io/tower/pkg/apis/... -h ./hack/boilerplate.go.txt -O zz_generated.deepcopy
 
 clienset:
 	./hack/generate_client.sh
