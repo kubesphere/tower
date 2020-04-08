@@ -39,6 +39,8 @@ const (
 	// Service port
 	kubernetesPort = 6443
 	kubespherePort = 80
+
+	defaultAgentNamespace = "kubesphere-system"
 )
 
 type AgentController struct {
@@ -150,7 +152,7 @@ func (c *AgentController) syncAgent(key string) error {
 		klog.V(4).Infof("Finished syncing agent %s/%s in %s", namespace, name, time.Since(startTime))
 	}()
 
-	agent, err := c.agentLister.Agents(namespace).Get(name)
+	agent, err := c.agentLister.Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil
@@ -218,10 +220,10 @@ func (c *AgentController) syncAgent(key string) error {
 		},
 	}
 
-	service, err := c.serviceClient.CoreV1().Services(agent.Namespace).Get(serviceName, v1.GetOptions{})
+	service, err := c.serviceClient.CoreV1().Services(defaultAgentNamespace).Get(serviceName, v1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			service, err = c.serviceClient.CoreV1().Services(agent.Namespace).Create(&mcService)
+			service, err = c.serviceClient.CoreV1().Services(defaultAgentNamespace).Create(&mcService)
 			if err != nil {
 				return err
 			}
@@ -234,7 +236,7 @@ func (c *AgentController) syncAgent(key string) error {
 		mcService.ObjectMeta = service.ObjectMeta
 		mcService.Spec.ClusterIP = service.Spec.ClusterIP
 
-		service, err = c.serviceClient.CoreV1().Services(agent.Namespace).Update(&mcService)
+		service, err = c.serviceClient.CoreV1().Services(defaultAgentNamespace).Update(&mcService)
 		if err != nil {
 			return err
 		}
@@ -269,7 +271,7 @@ func (c *AgentController) syncAgent(key string) error {
 	}
 
 	if !reflect.DeepEqual(agent, newAgent) {
-		_, err = c.agentClient.ClusterV1alpha1().Agents(agent.Namespace).Update(agent)
+		_, err = c.agentClient.ClusterV1alpha1().Agents().Update(agent)
 		if err != nil {
 			klog.Error(err)
 			return err

@@ -32,8 +32,8 @@ type ClusterV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ClusterV1alpha1Client) Agents(namespace string) AgentInterface {
-	return newAgents(c, namespace)
+func (c *ClusterV1alpha1Client) Agents() AgentInterface {
+	return newAgents(c)
 }
 
 // NewForConfig creates a new ClusterV1alpha1Client for the given config.
