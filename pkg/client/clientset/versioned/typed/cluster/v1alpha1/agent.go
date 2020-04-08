@@ -30,7 +30,7 @@ import (
 // AgentsGetter has a method to return a AgentInterface.
 // A group's client should implement this interface.
 type AgentsGetter interface {
-	Agents(namespace string) AgentInterface
+	Agents() AgentInterface
 }
 
 // AgentInterface has methods to work with Agent resources.
@@ -50,14 +50,12 @@ type AgentInterface interface {
 // agents implements AgentInterface
 type agents struct {
 	client rest.Interface
-	ns     string
 }
 
 // newAgents returns a Agents
-func newAgents(c *ClusterV1alpha1Client, namespace string) *agents {
+func newAgents(c *ClusterV1alpha1Client) *agents {
 	return &agents{
 		client: c.RESTClient(),
-		ns:     namespace,
 	}
 }
 
@@ -65,7 +63,6 @@ func newAgents(c *ClusterV1alpha1Client, namespace string) *agents {
 func (c *agents) Get(name string, options v1.GetOptions) (result *v1alpha1.Agent, err error) {
 	result = &v1alpha1.Agent{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("agents").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
@@ -82,7 +79,6 @@ func (c *agents) List(opts v1.ListOptions) (result *v1alpha1.AgentList, err erro
 	}
 	result = &v1alpha1.AgentList{}
 	err = c.client.Get().
-		Namespace(c.ns).
 		Resource("agents").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -99,7 +95,6 @@ func (c *agents) Watch(opts v1.ListOptions) (watch.Interface, error) {
 	}
 	opts.Watch = true
 	return c.client.Get().
-		Namespace(c.ns).
 		Resource("agents").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -110,7 +105,6 @@ func (c *agents) Watch(opts v1.ListOptions) (watch.Interface, error) {
 func (c *agents) Create(agent *v1alpha1.Agent) (result *v1alpha1.Agent, err error) {
 	result = &v1alpha1.Agent{}
 	err = c.client.Post().
-		Namespace(c.ns).
 		Resource("agents").
 		Body(agent).
 		Do().
@@ -122,7 +116,6 @@ func (c *agents) Create(agent *v1alpha1.Agent) (result *v1alpha1.Agent, err erro
 func (c *agents) Update(agent *v1alpha1.Agent) (result *v1alpha1.Agent, err error) {
 	result = &v1alpha1.Agent{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("agents").
 		Name(agent.Name).
 		Body(agent).
@@ -137,7 +130,6 @@ func (c *agents) Update(agent *v1alpha1.Agent) (result *v1alpha1.Agent, err erro
 func (c *agents) UpdateStatus(agent *v1alpha1.Agent) (result *v1alpha1.Agent, err error) {
 	result = &v1alpha1.Agent{}
 	err = c.client.Put().
-		Namespace(c.ns).
 		Resource("agents").
 		Name(agent.Name).
 		SubResource("status").
@@ -150,7 +142,6 @@ func (c *agents) UpdateStatus(agent *v1alpha1.Agent) (result *v1alpha1.Agent, er
 // Delete takes name of the agent and deletes it. Returns an error if one occurs.
 func (c *agents) Delete(name string, options *v1.DeleteOptions) error {
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("agents").
 		Name(name).
 		Body(options).
@@ -165,7 +156,6 @@ func (c *agents) DeleteCollection(options *v1.DeleteOptions, listOptions v1.List
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
 	return c.client.Delete().
-		Namespace(c.ns).
 		Resource("agents").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
@@ -178,7 +168,6 @@ func (c *agents) DeleteCollection(options *v1.DeleteOptions, listOptions v1.List
 func (c *agents) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.Agent, err error) {
 	result = &v1alpha1.Agent{}
 	err = c.client.Patch(pt).
-		Namespace(c.ns).
 		Resource("agents").
 		SubResource(subresources...).
 		Name(name).

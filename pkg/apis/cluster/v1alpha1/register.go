@@ -27,7 +27,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	SchemeGroupVersion = schema.GroupVersion{Group: "tower.kubesphere.io", Version: "v1alpha1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "cluster.kubesphere.io", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}

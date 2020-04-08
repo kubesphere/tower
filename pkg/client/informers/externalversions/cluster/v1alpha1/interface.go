@@ -39,5 +39,5 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 
 // Agents returns a AgentInformer.
 func (v *version) Agents() AgentInformer {
-	return &agentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+	return &agentInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

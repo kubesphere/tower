@@ -91,6 +91,7 @@ type AgentStatus struct {
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +genclient:nonNamespaced
 // +k8s:openapi-gen=true
 
 // Agent is the Schema for the agents API
