@@ -44,13 +44,13 @@ type Proxy struct {
 	sessions   *utils.Agents
 	sshConfig  *ssh.ServerConfig
 
+	certificateIssuer certs.CertificateIssuer
+
 	host string
 	port int
 
-	caCert     []byte
-	caKey      []byte
-	serverCert []byte
-	serverKey  []byte
+	caCert []byte
+	caKey  []byte
 
 	agentClient clientset.Interface
 	agentSynced cache.InformerSynced
@@ -79,14 +79,9 @@ func NewServer(options *Options, agentInformer agentinformers.AgentInformer, cli
 
 	s.caCert, s.caKey = loadCertificateOrDie(options.CaCert), loadCertificateOrDie(options.CaKey)
 
-	certificateIssuer, err := certs.NewSimpleCertificateIssuer(options.CaCert, options.CaKey, "")
+	s.certificateIssuer, err = certs.NewSimpleCertificateIssuer(options.CaCert, options.CaKey, "")
 	if err != nil {
 		klog.Fatal(err)
-	}
-
-	s.serverCert, s.serverKey, err = certificateIssuer.IssueCertAndKey(options.PublishServiceAddress, options.PublishServiceAddress)
-	if err != nil {
-		klog.Fatalf("Failed to issue server certificate %v", err)
 	}
 
 	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -176,7 +171,14 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIServerPort, c, s.caCert, s.serverCert, s.serverKey)
+
+	cert, key, err := s.certificateIssuer.IssueCertAndKey(client.Spec.Proxy, client.Spec.Proxy)
+	if err != nil {
+		klog.Errorf("Failed to issue certificates, %#v", err)
+		return
+	}
+
+	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIServerPort, c, s.caCert, cert, key)
 	if err := proxy.Start(ctx); err != nil {
 		failed(err)
 		return
@@ -276,7 +278,10 @@ func (s *Proxy) addAgent(obj interface{}) {
 	}
 
 	// skip uninitialized agent
-	if agt.Spec.KubernetesAPIServerPort == 0 || agt.Spec.KubeSphereAPIServerPort == 0 || len(agt.Spec.Token) == 0 {
+	if agt.Spec.KubernetesAPIServerPort == 0 ||
+		agt.Spec.KubeSphereAPIServerPort == 0 ||
+		len(agt.Spec.Token) == 0 ||
+		len(agt.Spec.Proxy) == 0 {
 		return
 	}
 
