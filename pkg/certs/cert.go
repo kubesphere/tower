@@ -215,7 +215,7 @@ func (s *simpleCertificateIssuer) IssueCertAndKey(ip string, dns ...string) ([]b
 	}
 	clientCert, clientKey, err := NewCertAndKey(s.cert, s.signer, &clientCertConfig)
 	if err != nil {
-		return nil, nil, errors.New("failed to create certificate and key")
+		return nil, nil, errors.Wrapf(err, "failed to issue certificate and key")
 	}
 
 	encodedClientKey, err := keyutil.MarshalPrivateKeyToPEM(clientKey)
