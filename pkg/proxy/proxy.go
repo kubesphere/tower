@@ -24,6 +24,7 @@ import (
 	agentinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -172,7 +173,13 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cert, key, err := s.certificateIssuer.IssueCertAndKey(client.Spec.Proxy, client.Spec.Proxy)
+	host, _, err := net.SplitHostPort(client.Spec.Proxy)
+	if err != nil {
+		klog.Errorf("Failed to get host %#v", err)
+		return
+	}
+
+	cert, key, err := s.certificateIssuer.IssueCertAndKey(host, host)
 	if err != nil {
 		klog.Errorf("Failed to issue certificates, %#v", err)
 		return
