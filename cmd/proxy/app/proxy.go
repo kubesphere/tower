@@ -3,13 +3,10 @@ package app
 import (
 	"flag"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
-	"kubesphere.io/tower/pkg/controllers"
 	"kubesphere.io/tower/pkg/proxy"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
@@ -36,39 +33,20 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			serviceClient, err := kubernetes.NewForConfig(config)
+			clusterClient, err := clientset.NewForConfig(config)
 			if err != nil {
 				return err
 			}
 
-			agentsClient, err := clientset.NewForConfig(config)
+			agentsInformerFactory := informers.NewSharedInformerFactory(clusterClient, 10*time.Minute)
+
+			p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Clusters(), clusterClient)
 			if err != nil {
 				return err
 			}
-
-			agentsInformerFactory := informers.NewSharedInformerFactory(agentsClient, 10*time.Minute)
-
-			p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Agents(), agentsClient)
-			if err != nil {
-				return err
-			}
-
-			certificateIssuer, err := certs.NewSimpleCertificateIssuer(options.ProxyOptions.CaCert, options.ProxyOptions.CaKey, options.ProxyOptions.PublishServiceAddress)
-			if err != nil {
-				return err
-			}
-
-			agentController := controllers.NewAgentController(agentsInformerFactory.Cluster().V1alpha1().Agents(), agentsClient, serviceClient, certificateIssuer, options.ProxyOptions.PublishServiceAddress)
 
 			stopCh := signals.SetupSignalHandler()
 			agentsInformerFactory.Start(stopCh)
-
-			go func() {
-				err = agentController.Run(1, stopCh)
-				if err != nil {
-					klog.Fatal(err)
-				}
-			}()
 
 			if err := p.Run(stopCh); err != nil {
 				return err

@@ -8,25 +8,28 @@ import (
 
 type Agents struct {
 	sync.RWMutex
-	inner map[string]*v1alpha1.Agent
+	inner map[string]*v1alpha1.Cluster
 }
 
 func NewAgents() *Agents {
 	return &Agents{
-		inner: map[string]*v1alpha1.Agent{},
+		inner: map[string]*v1alpha1.Cluster{},
 	}
 }
 
 func FakeAgents() *Agents {
 	agents := NewAgents()
-	agents.inner["alpha"] = &v1alpha1.Agent{
+	agents.inner["alpha"] = &v1alpha1.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "alpha",
 		},
-		Spec: v1alpha1.AgentSpec{
-			Token:                   "abcedefg",
-			KubernetesAPIServerPort: 6443,
-			KubeSphereAPIServerPort: 16443,
+		Spec: v1alpha1.ClusterSpec{
+			Connection: v1alpha1.Connection{
+				Type:                    v1alpha1.ConnectionTypeProxy,
+				Token:                   "abcedefg",
+				KubernetesAPIServerPort: 6443,
+				KubeSphereAPIServerPort: 16443,
+			},
 		},
 	}
 
@@ -42,7 +45,7 @@ func (g *Agents) Len() int {
 }
 
 // Get agent from the index by key
-func (g *Agents) Get(key string) (*v1alpha1.Agent, bool) {
+func (g *Agents) Get(key string) (*v1alpha1.Cluster, bool) {
 	g.RLock()
 	agent, found := g.inner[key]
 	g.RUnlock()
@@ -50,7 +53,7 @@ func (g *Agents) Get(key string) (*v1alpha1.Agent, bool) {
 }
 
 // Set an agent into the list by specific key
-func (g *Agents) Set(key string, agent *v1alpha1.Agent) {
+func (g *Agents) Set(key string, agent *v1alpha1.Cluster) {
 	g.Lock()
 	g.inner[key] = agent
 	g.Unlock()
@@ -64,6 +67,6 @@ func (g *Agents) Del(key string) {
 }
 
 // Add adds an agent to the list
-func (g *Agents) Add(agent *v1alpha1.Agent) {
-	g.Set(agent.Name, agent)
+func (g *Agents) Add(cluster *v1alpha1.Cluster) {
+	g.Set(cluster.Name, cluster)
 }
