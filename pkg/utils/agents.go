@@ -25,6 +25,7 @@ func FakeAgents() *Agents {
 		},
 		Spec: v1alpha1.ClusterSpec{
 			Connection: v1alpha1.Connection{
+				Type:                    v1alpha1.ConnectionTypeProxy,
 				Token:                   "abcedefg",
 				KubernetesAPIServerPort: 6443,
 				KubeSphereAPIServerPort: 16443,
