@@ -22,8 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// Agents returns a AgentInformer.
-	Agents() AgentInformer
+	// Clusters returns a ClusterInformer.
+	Clusters() ClusterInformer
 }
 
 type version struct {
@@ -37,7 +37,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// Agents returns a AgentInformer.
-func (v *version) Agents() AgentInformer {
-	return &agentInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+// Clusters returns a ClusterInformer.
+func (v *version) Clusters() ClusterInformer {
+	return &clusterInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

@@ -24,7 +24,7 @@ import (
 
 type ClusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	AgentsGetter
+	ClustersGetter
 }
 
 // ClusterV1alpha1Client is used to interact with features provided by the cluster.kubesphere.io group.
@@ -32,8 +32,8 @@ type ClusterV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ClusterV1alpha1Client) Agents() AgentInterface {
-	return newAgents(c)
+func (c *ClusterV1alpha1Client) Clusters() ClusterInterface {
+	return newClusters(c)
 }
 
 // NewForConfig creates a new ClusterV1alpha1Client for the given config.

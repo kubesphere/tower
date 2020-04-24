@@ -21,7 +21,7 @@ import (
 	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	agentinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
+	clusterinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
 	"net"
@@ -53,18 +53,18 @@ type Proxy struct {
 	caCert []byte
 	caKey  []byte
 
-	agentClient clientset.Interface
-	agentSynced cache.InformerSynced
+	clusterClient clientset.Interface
+	clusterSynced cache.InformerSynced
 }
 
-func NewServer(options *Options, agentInformer agentinformers.AgentInformer, client clientset.Interface) (*Proxy, error) {
+func NewServer(options *Options, clusterInformer clusterinformers.ClusterInformer, client clientset.Interface) (*Proxy, error) {
 
 	s := &Proxy{
-		httpServer:  NewHTTPServer(),
-		sessions:    utils.NewAgents(),
-		host:        options.Host,
-		port:        options.Port,
-		agentClient: client,
+		httpServer:    NewHTTPServer(),
+		sessions:      utils.NewAgents(),
+		host:          options.Host,
+		port:          options.Port,
+		clusterClient: client,
 	}
 
 	key, _ := generateKey()
@@ -85,14 +85,14 @@ func NewServer(options *Options, agentInformer agentinformers.AgentInformer, cli
 		klog.Fatal(err)
 	}
 
-	agentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: s.addAgent,
+	clusterInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: s.addCluster,
 		UpdateFunc: func(old, new interface{}) {
-			s.addAgent(new)
+			s.addCluster(new)
 		},
 		DeleteFunc: s.delete,
 	})
-	s.agentSynced = agentInformer.Informer().HasSynced
+	s.clusterSynced = clusterInformer.Informer().HasSynced
 
 	return s, nil
 }
@@ -165,7 +165,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	}
 
 	client, ok := s.sessions.Get(c.Name)
-	if !ok || (c.Token != client.Spec.Token) {
+	if !ok || (c.Token != client.Spec.Connection.Token) {
 		r.Reply(false, []byte("Unauthorized agent"))
 		return
 	}
@@ -173,7 +173,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	host, _, err := net.SplitHostPort(client.Spec.Proxy)
+	host, _, err := net.SplitHostPort(client.Spec.Connection.KubeSphereAPIEndpoint)
 	if err != nil {
 		klog.Errorf("Failed to get host %#v", err)
 		return
@@ -185,7 +185,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.KubernetesAPIServerPort, client.Spec.KubeSphereAPIServerPort, c, s.caCert, cert, key)
+	proxy, _ := NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.Connection.KubernetesAPIServerPort, client.Spec.Connection.KubeSphereAPIServerPort, c, s.caCert, cert, key)
 	if err := proxy.Start(ctx); err != nil {
 		failed(err)
 		return
@@ -209,7 +209,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 func (s *Proxy) Run(stopCh <-chan struct{}) error {
 
-	if !cache.WaitForCacheSync(stopCh, s.agentSynced) {
+	if !cache.WaitForCacheSync(stopCh, s.clusterSynced) {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -276,46 +276,44 @@ func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissi
 	return nil, nil
 }
 
-func (s *Proxy) addAgent(obj interface{}) {
-	agt := obj.(*v1alpha1.Agent)
+func (s *Proxy) addCluster(obj interface{}) {
+	cluster := obj.(*v1alpha1.Cluster)
 
-	if agt.Spec.Paused {
-		s.delete(obj)
+	if !cluster.Spec.Enable || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
 		return
 	}
 
 	// skip uninitialized agent
-	if agt.Spec.KubernetesAPIServerPort == 0 ||
-		agt.Spec.KubeSphereAPIServerPort == 0 ||
-		len(agt.Spec.Token) == 0 ||
-		len(agt.Spec.Proxy) == 0 {
+	if cluster.Spec.Connection.KubernetesAPIServerPort == 0 ||
+		cluster.Spec.Connection.KubeSphereAPIServerPort == 0 ||
+		len(cluster.Spec.Connection.Token) == 0 {
 		return
 	}
 
-	s.sessions.Add(agt)
+	s.sessions.Add(cluster)
 }
 
 func (s *Proxy) delete(obj interface{}) {
-	agt := obj.(*v1alpha1.Agent)
+	cluster := obj.(*v1alpha1.Cluster)
 
-	_, found := s.sessions.Get(agt.Name)
+	_, found := s.sessions.Get(cluster.Name)
 	if !found {
 		return
 	}
-	s.sessions.Del(agt.Name)
+	s.sessions.Del(cluster.Name)
 }
 
 //
-func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
+func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 
-	agt, err := s.agentClient.ClusterV1alpha1().Agents().Get(agent.Name, v1.GetOptions{})
+	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(cluster.Name, v1.GetOptions{})
 	if err != nil {
 		klog.Error(err)
 		return err
 	}
 
-	statusCondition := v1alpha1.AgentCondition{
-		Type:               v1alpha1.AgentConnected,
+	statusCondition := v1alpha1.ClusterCondition{
+		Type:               v1alpha1.ClusterAgentAvailable,
 		Status:             corev1.ConditionTrue,
 		LastUpdateTime:     v1.Time{Time: time.Now()},
 		LastTransitionTime: v1.Time{Time: time.Now()},
@@ -328,17 +326,17 @@ func (s *Proxy) Update(agent *v1alpha1.Agent, connected bool) error {
 		statusCondition.Message = "Agent has not connected to proxy."
 	}
 
-	newConditions := make([]v1alpha1.AgentCondition, 0)
-	for _, condition := range agt.Status.Conditions {
-		if condition.Type == v1alpha1.AgentConnected {
+	newConditions := make([]v1alpha1.ClusterCondition, 0)
+	for _, condition := range cluster.Status.Conditions {
+		if condition.Type == v1alpha1.ClusterAgentAvailable {
 			continue
 		}
 		newConditions = append(newConditions, condition)
 	}
 	newConditions = append(newConditions, statusCondition)
-	agt.Status.Conditions = newConditions
+	cluster.Status.Conditions = newConditions
 
-	agt, err = s.agentClient.ClusterV1alpha1().Agents().Update(agt)
+	cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(cluster)
 	if err != nil {
 		klog.Error(err)
 		return err

@@ -29,58 +29,58 @@ import (
 	v1alpha1 "kubesphere.io/tower/pkg/client/listers/cluster/v1alpha1"
 )
 
-// AgentInformer provides access to a shared informer and lister for
-// Agents.
-type AgentInformer interface {
+// ClusterInformer provides access to a shared informer and lister for
+// Clusters.
+type ClusterInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.AgentLister
+	Lister() v1alpha1.ClusterLister
 }
 
-type agentInformer struct {
+type clusterInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 }
 
-// NewAgentInformer constructs a new informer for Agent type.
+// NewClusterInformer constructs a new informer for Cluster type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewAgentInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredAgentInformer(client, resyncPeriod, indexers, nil)
+func NewClusterInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredClusterInformer(client, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredAgentInformer constructs a new informer for Agent type.
+// NewFilteredClusterInformer constructs a new informer for Cluster type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredAgentInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredClusterInformer(client versioned.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ClusterV1alpha1().Agents().List(options)
+				return client.ClusterV1alpha1().Clusters().List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ClusterV1alpha1().Agents().Watch(options)
+				return client.ClusterV1alpha1().Clusters().Watch(options)
 			},
 		},
-		&clusterv1alpha1.Agent{},
+		&clusterv1alpha1.Cluster{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *agentInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredAgentInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *clusterInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredClusterInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *agentInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&clusterv1alpha1.Agent{}, f.defaultInformer)
+func (f *clusterInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&clusterv1alpha1.Cluster{}, f.defaultInformer)
 }
 
-func (f *agentInformer) Lister() v1alpha1.AgentLister {
-	return v1alpha1.NewAgentLister(f.Informer().GetIndexer())
+func (f *clusterInformer) Lister() v1alpha1.ClusterLister {
+	return v1alpha1.NewClusterLister(f.Informer().GetIndexer())
 }

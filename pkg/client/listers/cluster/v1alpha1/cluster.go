@@ -23,41 +23,41 @@ import (
 	v1alpha1 "kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 )
 
-// AgentLister helps list Agents.
-type AgentLister interface {
-	// List lists all Agents in the indexer.
-	List(selector labels.Selector) (ret []*v1alpha1.Agent, err error)
-	// Get retrieves the Agent from the index for a given name.
-	Get(name string) (*v1alpha1.Agent, error)
-	AgentListerExpansion
+// ClusterLister helps list Clusters.
+type ClusterLister interface {
+	// List lists all Clusters in the indexer.
+	List(selector labels.Selector) (ret []*v1alpha1.Cluster, err error)
+	// Get retrieves the Cluster from the index for a given name.
+	Get(name string) (*v1alpha1.Cluster, error)
+	ClusterListerExpansion
 }
 
-// agentLister implements the AgentLister interface.
-type agentLister struct {
+// clusterLister implements the ClusterLister interface.
+type clusterLister struct {
 	indexer cache.Indexer
 }
 
-// NewAgentLister returns a new AgentLister.
-func NewAgentLister(indexer cache.Indexer) AgentLister {
-	return &agentLister{indexer: indexer}
+// NewClusterLister returns a new ClusterLister.
+func NewClusterLister(indexer cache.Indexer) ClusterLister {
+	return &clusterLister{indexer: indexer}
 }
 
-// List lists all Agents in the indexer.
-func (s *agentLister) List(selector labels.Selector) (ret []*v1alpha1.Agent, err error) {
+// List lists all Clusters in the indexer.
+func (s *clusterLister) List(selector labels.Selector) (ret []*v1alpha1.Cluster, err error) {
 	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1alpha1.Agent))
+		ret = append(ret, m.(*v1alpha1.Cluster))
 	})
 	return ret, err
 }
 
-// Get retrieves the Agent from the index for a given name.
-func (s *agentLister) Get(name string) (*v1alpha1.Agent, error) {
+// Get retrieves the Cluster from the index for a given name.
+func (s *clusterLister) Get(name string) (*v1alpha1.Cluster, error) {
 	obj, exists, err := s.indexer.GetByKey(name)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.NewNotFound(v1alpha1.Resource("agent"), name)
+		return nil, errors.NewNotFound(v1alpha1.Resource("cluster"), name)
 	}
-	return obj.(*v1alpha1.Agent), nil
+	return obj.(*v1alpha1.Cluster), nil
 }
