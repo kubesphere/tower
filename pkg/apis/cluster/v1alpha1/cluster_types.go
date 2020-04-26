@@ -56,9 +56,15 @@ type Connection struct {
 	// Will be populated by ks-apiserver if connection type is proxy.
 	KubeSphereAPIEndpoint string `json:"kubesphereAPIEndpoint,omitempty"`
 
-	// KubeConfig content used to connect to cluster api server
+	// Kubernetes API Server endpoint. This can be a hostname,
+	// hostname:port, IP or IP:port.
 	// Should provide this field explicitly if connection type is direct.
 	// Will be populated by ks-apiserver if connection type is proxy.
+	KubernetesAPIEndpoint string `json:"kubernetesAPIEndpoint,omitempty"`
+
+	// KubeConfig content used to connect to cluster api server
+	// Should provide this field explicitly if connection type is direct.
+	// Will be populated by ks-proxy if connection type is proxy.
 	KubeConfig []byte `json:"kubeconfig,omitempty"`
 
 	// Token used by agents of member cluster to connect to host cluster proxy.
@@ -110,10 +116,11 @@ type ClusterStatus struct {
 	// Represents the latest available observations of a cluster's current state.
 	Conditions []ClusterCondition `json:"conditions,omitempty"`
 
-	// GitVersion of the kubernetes cluster, this field is set by cluster controller
+	// GitVersion of the kubernetes cluster, this field is populated by cluster controller
 	KubernetesVersion string `json:"kubernetesVersion,omitempty"`
 
 	// Count of the kubernetes cluster nodes
+	// This field may not reflect the instant status of the cluster.
 	NodeCount int `json:"nodeCount,omitempty"`
 
 	// Zones are the names of availability zones in which the nodes of the cluster exist, e.g. 'us-east1-a'.
@@ -129,9 +136,9 @@ type ClusterStatus struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 // +genclient:nonNamespaced
-// +kubebuilder:printcolumn:name="Federated",type="boolean",JSONPath=".spec.federated"
+// +kubebuilder:printcolumn:name="Federated",type="boolean",JSONPath=".spec.joinFederation"
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.provider"
-// +kubebuilder:printcolumn:name="Active",type="boolean",JSONPath=".spec.active"
+// +kubebuilder:printcolumn:name="Active",type="boolean",JSONPath=".spec.enable"
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.kubernetesVersion"
 // +kubebuilder:resource:scope=Cluster
 

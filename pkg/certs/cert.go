@@ -151,7 +151,7 @@ func BuildKubeConfigFromSpec(spec *KubeConfigSpec, clustername string) (*clientc
 
 type CertificateIssuer interface {
 	IssueCertAndKey(ip string, dnsNames ...string) ([]byte, []byte, error)
-	IssueKubeConfig(clusterName string, ip string, proxyPort uint16) ([]byte, error)
+	IssueKubeConfig(clusterName string, apiServer string) ([]byte, error)
 }
 
 type simpleCertificateIssuer struct {
@@ -173,11 +173,11 @@ func NewSimpleCertificateIssuer(caCert, caKey, proxyServer string) (CertificateI
 	}, nil
 }
 
-func (s *simpleCertificateIssuer) IssueKubeConfig(clusterName string, ip string, port uint16) ([]byte, error) {
+func (s *simpleCertificateIssuer) IssueKubeConfig(clusterName string, apiServer string) ([]byte, error) {
 	kubeConfigSpec := &KubeConfigSpec{
 		CACert:     s.cert,
-		APIServer:  fmt.Sprintf("https://%s:%d", ip, port),
-		ClientName: clusterName,
+		APIServer:  apiServer,
+		ClientName: "kubernetes-admin",
 		ClientCertAuth: &clientCertAuth{
 			CAKey:         s.signer,
 			Organizations: []string{SystemPrivilegedGroup},

@@ -24,8 +24,8 @@ import (
 	clusterinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
-	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -173,13 +173,14 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	host, _, err := net.SplitHostPort(client.Spec.Connection.KubeSphereAPIEndpoint)
+	u, err := url.Parse(client.Spec.Connection.KubeSphereAPIEndpoint)
 	if err != nil {
 		klog.Errorf("Failed to get host %#v", err)
+		failed(err)
 		return
 	}
 
-	cert, key, err := s.certificateIssuer.IssueCertAndKey(host, host)
+	cert, key, err := s.certificateIssuer.IssueCertAndKey(u.Hostname(), u.Hostname())
 	if err != nil {
 		klog.Errorf("Failed to issue certificates, %#v", err)
 		return
@@ -280,13 +281,17 @@ func (s *Proxy) addCluster(obj interface{}) {
 	cluster := obj.(*v1alpha1.Cluster)
 
 	if !cluster.Spec.Enable || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
-		return
+		if _, ok := s.sessions.Get(cluster.Name); ok {
+			s.delete(obj)
+		}
 	}
 
 	// skip uninitialized agent
 	if cluster.Spec.Connection.KubernetesAPIServerPort == 0 ||
 		cluster.Spec.Connection.KubeSphereAPIServerPort == 0 ||
-		len(cluster.Spec.Connection.Token) == 0 {
+		len(cluster.Spec.Connection.Token) == 0 ||
+		len(cluster.Spec.Connection.KubernetesAPIEndpoint) == 0 ||
+		len(cluster.Spec.Connection.KubeSphereAPIEndpoint) == 0 {
 		return
 	}
 
@@ -319,6 +324,16 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 		LastTransitionTime: v1.Time{Time: time.Now()},
 		Reason:             "",
 		Message:            "Agent has connected to proxy successfully.",
+	}
+
+	// issue kubeconfig to cluster
+	if connected {
+		cluster.Spec.Connection.KubeConfig, err = s.certificateIssuer.IssueKubeConfig(cluster.Name, cluster.Spec.Connection.KubernetesAPIEndpoint)
+		if err != nil {
+			message := fmt.Sprintf("Error issuing kubeconfig to cluster %s, error %s", cluster.Name, err)
+			statusCondition.Message = message
+			statusCondition.Status = corev1.ConditionFalse
+		}
 	}
 
 	if !connected {
