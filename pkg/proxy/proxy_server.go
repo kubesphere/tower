@@ -116,8 +116,7 @@ func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port ui
 }
 
 // TODO: verify issued client certificate
-func verifyClientCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	//klog.V(0).Info(rawCerts, verifiedChains)
+func verifyClientCertificate(_ [][]byte, _ [][]*x509.Certificate) error {
 	return nil
 }
 
