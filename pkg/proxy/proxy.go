@@ -42,7 +42,8 @@ var upgrader = websocket.Upgrader{
 //
 type Proxy struct {
 	httpServer *HTTPServer
-	sessions   *utils.Agents
+	agents     *utils.Agents
+	sessions   map[string]*HTTPProxy
 	sshConfig  *ssh.ServerConfig
 
 	certificateIssuer certs.CertificateIssuer
@@ -61,7 +62,8 @@ func NewServer(options *Options, clusterInformer clusterinformers.ClusterInforme
 
 	s := &Proxy{
 		httpServer:    NewHTTPServer(),
-		sessions:      utils.NewAgents(),
+		agents:        utils.NewAgents(),
+		sessions:      make(map[string]*HTTPProxy, 0),
 		host:          options.Host,
 		port:          options.Port,
 		clusterClient: client,
@@ -164,9 +166,14 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	client, ok := s.sessions.Get(c.Name)
+	client, ok := s.agents.Get(c.Name)
 	if !ok || (c.Token != client.Spec.Connection.Token) {
 		r.Reply(false, []byte("Unauthorized agent"))
+		return
+	}
+
+	if _, ok := s.sessions[c.Name]; ok {
+		r.Reply(false, []byte("A session already allocated for this client."))
 		return
 	}
 
@@ -192,6 +199,8 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	s.sessions[c.Name] = proxy
+
 	r.Reply(true, nil)
 	klog.V(0).Infof("Connection established with %s", client.Name)
 	retry.OnError(retry.DefaultBackoff, apierrors.IsConflict, func() error {
@@ -202,10 +211,10 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	go s.handleSSHChannels(chans)
 	sshConn.Wait()
 	klog.V(0).Infof("Connection closed with %s", client.Name)
+	delete(s.sessions, c.Name)
 	retry.OnError(retry.DefaultBackoff, apierrors.IsConflict, func() error {
 		return s.Update(client, false)
 	})
-
 }
 
 func (s *Proxy) Run(stopCh <-chan struct{}) error {
@@ -281,7 +290,7 @@ func (s *Proxy) addCluster(obj interface{}) {
 	cluster := obj.(*v1alpha1.Cluster)
 
 	if !cluster.Spec.Enable || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
-		if _, ok := s.sessions.Get(cluster.Name); ok {
+		if _, ok := s.agents.Get(cluster.Name); ok {
 			s.delete(obj)
 		}
 	}
@@ -295,17 +304,17 @@ func (s *Proxy) addCluster(obj interface{}) {
 		return
 	}
 
-	s.sessions.Add(cluster)
+	s.agents.Add(cluster)
 }
 
 func (s *Proxy) delete(obj interface{}) {
 	cluster := obj.(*v1alpha1.Cluster)
 
-	_, found := s.sessions.Get(cluster.Name)
+	_, found := s.agents.Get(cluster.Name)
 	if !found {
 		return
 	}
-	s.sessions.Del(cluster.Name)
+	s.agents.Del(cluster.Name)
 }
 
 //
