@@ -145,7 +145,10 @@ func (agent *Agent) keepAliveLoop() {
 
 func (agent *Agent) connectionLoop() {
 	var connectionErr error
-	b := &backoff.Backoff{Max: agent.options.MaxRetryInterval}
+	b := &backoff.Backoff{
+		Factor: 1.4, // for faster reconnection
+		Max:    agent.options.MaxRetryInterval,
+	}
 	for agent.running {
 		if connectionErr != nil {
 			attempt := int(b.Attempt())

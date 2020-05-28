@@ -3,14 +3,18 @@ package app
 import (
 	"fmt"
 	"github.com/spf13/pflag"
+	"k8s.io/client-go/tools/leaderelection"
 	"kubesphere.io/tower/pkg/proxy"
 	"os"
+	"time"
 
 	"k8s.io/klog"
 )
 
 type ProxyRunOptions struct {
-	ProxyOptions *proxy.Options
+	ProxyOptions   *proxy.Options
+	LeaderElect    bool
+	LeaderElection *leaderelection.LeaderElectionConfig
 }
 
 func (o *ProxyRunOptions) Flags() *pflag.FlagSet {
@@ -21,6 +25,7 @@ func (o *ProxyRunOptions) Flags() *pflag.FlagSet {
 	flags.IntVar(&o.ProxyOptions.Port, "port", 8080, "Port listening for agent connections.")
 	flags.StringVar(&o.ProxyOptions.PublishServiceAddress, "publish-service-address", o.ProxyOptions.PublishServiceAddress, "Proxy service address, should be accessible for all agents.")
 	flags.StringVar(&o.ProxyOptions.KubeConfigPath, "kubeconfig", o.ProxyOptions.KubeConfigPath, "Kubeconfig file absolute path.")
+	flags.BoolVar(&o.LeaderElect, "leader-elect", o.LeaderElect, "whether to enable leader election or not")
 	return flags
 }
 
@@ -43,6 +48,7 @@ func (o *ProxyRunOptions) Print() {
 	klog.V(0).Infof("Host set to %s\n", o.ProxyOptions.Host)
 	klog.V(0).Infof("Agent port set to %d.\n", o.ProxyOptions.Port)
 	klog.V(0).Infof("Kubeconfig set to %q.\n", o.ProxyOptions.KubeConfigPath)
+	klog.V(0).Infof("Leader election set to %t", o.LeaderElect)
 }
 
 func newProxyRunOptions() *ProxyRunOptions {
@@ -55,5 +61,13 @@ func newProxyRunOptions() *ProxyRunOptions {
 		PublishServiceAddress: "127.0.0.1",
 	}
 
-	return &ProxyRunOptions{ProxyOptions: options}
+	return &ProxyRunOptions{
+		ProxyOptions: options,
+		LeaderElect:  false,
+		LeaderElection: &leaderelection.LeaderElectionConfig{
+			LeaseDuration: 30 * time.Second,
+			RenewDeadline: 15 * time.Second,
+			RetryPeriod:   5 * time.Second,
+		},
+	}
 }
