@@ -19,9 +19,9 @@ func NewAgentRunOptions() *AgentRunOptions {
 	options := &agent.Options{
 		Name:             "",
 		Server:           "",
-		KeepAlive:        1 * time.Minute,
+		KeepAlive:        30 * time.Second,
 		MaxRetryCount:    0,
-		MaxRetryInterval: 5 * time.Minute,
+		MaxRetryInterval: 2 * time.Minute,
 		Token:            "",
 	}
 
