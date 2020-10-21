@@ -35,7 +35,7 @@ jobs:
       run: |
         DOCKER_IMAGE=kubespheredev/tower
         DOCKER_PLATFORMS=linux/amd64,linux/arm64
-        VERSION=muti-arch
+        VERSION=latest
 
         if [[ $GITHUB_REF == refs/tags/* ]]; then
           VERSION=${GITHUB_REF#refs/tags/v}
