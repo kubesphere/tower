@@ -19,6 +19,9 @@ jobs:
         go-version: 1.13
       id: go
 
+    - name: ehco env
+      run: echo ${{ secrets.DOCKER_USERNAME }} && echo ${{ secrets.DOCKER_PASSWORD }}
+
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
       
@@ -69,7 +72,6 @@ jobs:
           ${{ runner.os }}-buildx-
 
     - name: Login to DockerHub
-      if: success()
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
