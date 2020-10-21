@@ -19,8 +19,11 @@ jobs:
         go-version: 1.13
       id: go
 
-    - name: ehco env
-      run: echo ${{ secrets.DOCKER_USERNAME }} && echo ${{ secrets.DOCKER_PASSWORD }}
+    - shell: bash
+      env:
+        SUPER_SECRET: ${{ secrets.DOCKER_USERNAME }}
+      run: |
+        echo "$SUPER_SECRET"
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
