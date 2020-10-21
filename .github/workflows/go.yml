@@ -30,6 +30,7 @@ jobs:
     
     - name: Build
       run: make
+
     - name: Prepare
       id: prepare
       run: |
@@ -54,8 +55,10 @@ jobs:
           --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
           --build-arg VCS_REF=${GITHUB_SHA::8} \
           ${TAGS} .
+
     - name: Set up Docker Buildx
       uses: crazy-max/ghaction-docker-buildx@v3
+
     - name: Cache Docker layers
       uses: actions/cache@v2
       id: cache
@@ -64,19 +67,23 @@ jobs:
         key: ${{ runner.os }}-buildx-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-buildx-
+
     - name: Docker Buildx (build)
       run: |
         docker buildx build --output "type=image,push=false" --cache-to "type=local,dest=/tmp/.buildx-cache" ${{ steps.prepare.outputs.buildx_args }}
+
     - name: Login to DockerHub
       if: success()
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
+
     - name: Docker Buildx (push)
       if: success()
       run: |
         docker buildx build --output "type=image,push=true" ${{ steps.prepare.outputs.buildx_args }}
+
     - name: Inspect image
       if: always()
       run: |
