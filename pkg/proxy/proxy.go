@@ -9,14 +9,22 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
+
 	"kubesphere.io/tower/pkg/agent"
 	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
@@ -24,13 +32,6 @@ import (
 	clusterinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
-
-	"golang.org/x/crypto/ssh"
 )
 
 var upgrader = websocket.Upgrader{
@@ -366,6 +367,7 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 		return err
 	}
 
+	klog.V(4).Infof("successfully updated cluster to %+v:", cluster)
 	return nil
 }
 

@@ -2,17 +2,22 @@ package app
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"k8s.io/klog"
-	"kubesphere.io/tower/pkg/agent"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/klog"
+
+	"kubesphere.io/tower/pkg/agent"
 )
 
 type AgentRunOptions struct {
-	AgentOptions *agent.Options
+	AgentOptions   *agent.Options
+	LeaderElect    bool
+	LeaderElection *leaderelection.LeaderElectionConfig
 }
 
 func NewAgentRunOptions() *AgentRunOptions {
@@ -25,7 +30,14 @@ func NewAgentRunOptions() *AgentRunOptions {
 		Token:            "",
 	}
 
-	return &AgentRunOptions{AgentOptions: options}
+	return &AgentRunOptions{AgentOptions: options,
+		LeaderElect: false,
+		LeaderElection: &leaderelection.LeaderElectionConfig{
+			LeaseDuration: 30 * time.Second,
+			RenewDeadline: 15 * time.Second,
+			RetryPeriod:   5 * time.Second,
+		},
+	}
 }
 
 func (o *AgentRunOptions) Flags() *pflag.FlagSet {
@@ -39,6 +51,7 @@ func (o *AgentRunOptions) Flags() *pflag.FlagSet {
 	flags.StringVar(&o.AgentOptions.Server, "proxy-server", "http://127.0.0.1:8080", "Proxy server address")
 	flags.StringVar(&o.AgentOptions.Token, "token", "", "Token to authenticate with proxy server")
 	flags.StringVar(&o.AgentOptions.Kubeconfig, "kubeconfig", o.AgentOptions.Kubeconfig, "Use kubeconfig instead of in-cluster config")
+	flags.BoolVar(&o.LeaderElect, "leader-elect", o.LeaderElect, "whether to enable leader election or not")
 
 	return flags
 }
@@ -81,5 +94,6 @@ func (o *AgentRunOptions) Print() {
 	klog.V(0).Infof("Kubeconfig set to %s\n", o.AgentOptions.Kubeconfig)
 	klog.V(0).Infof("Kubernetes service set to %s\n", o.AgentOptions.KubernetesApiserverSvc)
 	klog.V(0).Infof("Kubesphere service set to %s\n", o.AgentOptions.KubesphereApiserverSvc)
+	klog.V(0).Infof("LeaderElection set to %+v\n", o.LeaderElect)
 
 }
