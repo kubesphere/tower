@@ -4,14 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
-	"kubesphere.io/tower/pkg/utils"
-	"kubesphere.io/tower/pkg/version"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +13,14 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/ssh"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
+
+	"kubesphere.io/tower/pkg/utils"
+	"kubesphere.io/tower/pkg/version"
 
 	"github.com/jpillora/backoff"
 )
@@ -216,9 +218,12 @@ func (agent *Agent) connectionLoop() {
 			break
 		}
 
+		// we may encounter error like 'A session already allocated for this client.'
+		// continue can be helpful while we execute 'kubectl rollout restart -n kubesphere-system deployment cluster-agent'
+		// see issue #29
 		if len(configErr) > 0 {
-			klog.Error(string(configErr))
-			break
+			connectionErr = errors.New(string(configErr))
+			continue
 		}
 
 		klog.V(2).Infof("Connected (Latency %s)", time.Since(t0))
