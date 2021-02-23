@@ -3,6 +3,10 @@ package app
 import (
 	"context"
 	"flag"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -13,15 +17,12 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog"
+	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
+
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
 	"kubesphere.io/tower/pkg/proxy"
-	"os"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
-
-	"k8s.io/klog"
-	"strings"
-	"time"
 )
 
 func NewProxyCommand() *cobra.Command {
@@ -60,7 +61,8 @@ func NewProxyCommand() *cobra.Command {
 			run := func(ctx context.Context) {
 				agentsInformerFactory := informers.NewSharedInformerFactory(clusterClient, 10*time.Minute)
 
-				p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Clusters(), clusterClient)
+				p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Clusters(),
+					clusterClient, kubernetesClient)
 				if err != nil {
 					klog.Fatalf("Failed to create proxy server, %v", err)
 				}

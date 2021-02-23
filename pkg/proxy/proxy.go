@@ -9,14 +9,26 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/gorilla/websocket"
 	"io/ioutil"
+	mrand "math/rand"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog"
+
 	"kubesphere.io/tower/pkg/agent"
 	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
@@ -24,13 +36,19 @@ import (
 	clusterinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
-	"time"
+)
 
-	"golang.org/x/crypto/ssh"
+const (
+	// allocate kubernetesAPIServer port in range [portRangeMin, portRangeMax] for agents if port is not specified
+	// kubesphereAPIServer port is defaulted to kubernetesAPIServerPort + 10000
+	portRangeMin = 6000
+	portRangeMax = 7000
+
+	// Proxy service port
+	kubernetesPort = 6443
+	kubespherePort = 80
+
+	defaultAgentNamespace = "kubesphere-system"
 )
 
 var upgrader = websocket.Upgrader{
@@ -56,9 +74,12 @@ type Proxy struct {
 
 	clusterClient clientset.Interface
 	clusterSynced cache.InformerSynced
+
+	k8sClientSet *kubernetes.Clientset
 }
 
-func NewServer(options *Options, clusterInformer clusterinformers.ClusterInformer, client clientset.Interface) (*Proxy, error) {
+func NewServer(options *Options, clusterInformer clusterinformers.ClusterInformer, client clientset.Interface,
+	k8sClientSet *kubernetes.Clientset) (*Proxy, error) {
 
 	s := &Proxy{
 		httpServer:    NewHTTPServer(),
@@ -67,6 +88,7 @@ func NewServer(options *Options, clusterInformer clusterinformers.ClusterInforme
 		host:          options.Host,
 		port:          options.Port,
 		clusterClient: client,
+		k8sClientSet:  k8sClientSet,
 	}
 
 	key, _ := generateKey()
@@ -286,22 +308,145 @@ func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissi
 	return nil, nil
 }
 
+// addCluster funcition is called when a cluster object is created or updated
+// if the cluster type is not proxy, it returns.
+// if not and the cluster object is not initialized, it will allocate port, create a proxy svc(or update the
+// existed svc), generate a token for the proxy connection, finally update the cluster to initialized status.
 func (s *Proxy) addCluster(obj interface{}) {
 	cluster := obj.(*v1alpha1.Cluster)
 
-	if !cluster.Spec.Enable || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
-		if _, ok := s.agents.Get(cluster.Name); ok {
-			s.delete(obj)
+	// currently we didn't set cluster.Spec.Enable when creating cluster at client side, so only check
+	// if we enable cluster.Spec.JoinFederation now
+	if !cluster.Spec.JoinFederation || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
+		s.delete(obj)
+		return
+	}
+
+	// save a old copy of cluster
+	oldCluster := cluster.DeepCopy()
+	serviceName := fmt.Sprintf("mc-%s", cluster.Name)
+
+	// if the cluster has been initialized, we update the cache and return
+	if isConditionTrue(cluster, v1alpha1.ClusterInitialized) {
+		s.agents.Add(cluster)
+		return
+	}
+	// allocate ports for kubernetes and kubesphere endpoint
+	port, err := s.allocatePort()
+	if err != nil {
+		klog.Errorf("failed to allocate port for cluster %s, err: %+v", cluster.Name, err)
+		return
+	}
+
+	cluster.Spec.Connection.KubernetesAPIServerPort = port
+	cluster.Spec.Connection.KubeSphereAPIServerPort = port + 10000
+
+	if len(cluster.Spec.Connection.Token) == 0 {
+		cluster.Spec.Connection.Token = s.generateToken()
+	}
+
+	// create a proxy service spec
+	mcService := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name": serviceName,
+				"app":                    serviceName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/name": "tower",
+				"app":                    "tower",
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "kubernetes",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       kubernetesPort,
+					TargetPort: intstr.FromInt(int(cluster.Spec.Connection.KubernetesAPIServerPort)),
+				},
+				{
+					Name:       "kubesphere",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       kubespherePort,
+					TargetPort: intstr.FromInt(int(cluster.Spec.Connection.KubeSphereAPIServerPort)),
+				},
+			},
+		},
+	}
+
+	service, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		// proxy service not found, we create the proxy service
+		if apierrors.IsNotFound(err) {
+			service, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Create(context.TODO(),
+				&mcService, metav1.CreateOptions{})
+			if err != nil {
+				klog.Errorf("failed to create service %s. err: %+v", serviceName, err)
+				return
+			}
+		} else {
+			klog.Errorf("failed to get service %s. err: %+v", serviceName, err)
+			return
+		}
+	} else {
+		// update existed proxy service
+		if !reflect.DeepEqual(service.Spec, mcService.Spec) {
+			mcService.ObjectMeta = service.ObjectMeta
+			mcService.Spec.ClusterIP = service.Spec.ClusterIP
+
+			err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				svc, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(),
+					mcService.Name, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+
+				mcService.ResourceVersion = svc.ResourceVersion
+				_, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Update(context.TODO(),
+					&mcService, metav1.UpdateOptions{})
+				return err
+			})
+			if err != nil {
+				klog.Errorf("failed to update svc: %s, err: %+v", serviceName, err)
+				return
+			}
+
 		}
 	}
 
-	// skip uninitialized agent
-	if cluster.Spec.Connection.KubernetesAPIServerPort == 0 ||
-		cluster.Spec.Connection.KubeSphereAPIServerPort == 0 ||
-		len(cluster.Spec.Connection.Token) == 0 ||
-		len(cluster.Spec.Connection.KubernetesAPIEndpoint) == 0 ||
-		len(cluster.Spec.Connection.KubeSphereAPIEndpoint) == 0 {
-		return
+	// populates the kubernetes apiEndpoint and kubesphere apiEndpoint
+	cluster.Spec.Connection.KubernetesAPIEndpoint = fmt.Sprintf("https://%s:%d", mcService.Spec.ClusterIP, kubernetesPort)
+	cluster.Spec.Connection.KubeSphereAPIEndpoint = fmt.Sprintf("http://%s:%d", mcService.Spec.ClusterIP, kubespherePort)
+
+	initializedCondition := v1alpha1.ClusterCondition{
+		Type:               v1alpha1.ClusterInitialized,
+		Status:             corev1.ConditionTrue,
+		Reason:             string(v1alpha1.ClusterInitialized),
+		Message:            "Cluster has been initialized",
+		LastUpdateTime:     metav1.Now(),
+		LastTransitionTime: metav1.Now(),
+	}
+
+	updateClusterCondition(cluster, initializedCondition)
+
+	if !reflect.DeepEqual(oldCluster, cluster) {
+		err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+			c, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), cluster.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+
+			cluster.ResourceVersion = c.ResourceVersion
+			cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+			return err
+		})
+		if err != nil {
+			klog.Errorf("failed to update cluster %s, err: %+v", cluster.Name, err)
+			return
+		}
 	}
 
 	s.agents.Add(cluster)
@@ -311,16 +456,26 @@ func (s *Proxy) delete(obj interface{}) {
 	cluster := obj.(*v1alpha1.Cluster)
 
 	_, found := s.agents.Get(cluster.Name)
-	if !found {
+	if found {
+		s.agents.Del(cluster.Name)
+	}
+
+	if cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
 		return
 	}
-	s.agents.Del(cluster.Name)
+
+	serviceName := fmt.Sprintf("mc-%s", cluster.Name)
+
+	if err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Delete(context.TODO(), serviceName,
+		*metav1.NewDeleteOptions(0)); err != nil {
+		klog.Errorf("failed to delete service %s, err: %+v", serviceName, err)
+	}
 }
 
 //
 func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 
-	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(cluster.Name, v1.GetOptions{})
+	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), cluster.Name, metav1.GetOptions{})
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -329,8 +484,8 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 	statusCondition := v1alpha1.ClusterCondition{
 		Type:               v1alpha1.ClusterAgentAvailable,
 		Status:             corev1.ConditionTrue,
-		LastUpdateTime:     v1.Time{Time: time.Now()},
-		LastTransitionTime: v1.Time{Time: time.Now()},
+		LastUpdateTime:     metav1.Time{Time: time.Now()},
+		LastTransitionTime: metav1.Time{Time: time.Now()},
 		Reason:             "",
 		Message:            "Agent has connected to proxy successfully.",
 	}
@@ -360,13 +515,53 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 	newConditions = append(newConditions, statusCondition)
 	cluster.Status.Conditions = newConditions
 
-	cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(cluster)
+	cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
 	if err != nil {
 		klog.Error(err)
 		return err
 	}
 
 	return nil
+}
+
+// allocatePort find a available port between [portRangeMin, portRangeMax] in maximumRetries
+// TODO: only works with handful clusters
+func (s *Proxy) allocatePort() (uint16, error) {
+	mrand.Seed(time.Now().UnixNano())
+
+	clusters, err := s.clusterClient.ClusterV1alpha1().Clusters().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return 0, err
+	}
+
+	const maximumRetries = 10
+	for i := 0; i < maximumRetries; i++ {
+		collision := false
+		port := uint16(portRangeMin + mrand.Intn(portRangeMax-portRangeMin+1))
+
+		for _, item := range clusters.Items {
+			if item.Spec.Connection.Type == v1alpha1.ConnectionTypeProxy &&
+				item.Spec.Connection.KubernetesAPIServerPort != 0 &&
+				item.Spec.Connection.KubeSphereAPIServerPort == port {
+				collision = true
+				break
+			}
+		}
+
+		if !collision {
+			return port, nil
+		}
+	}
+
+	return 0, fmt.Errorf("unable to allocate port after %d retries", maximumRetries)
+}
+
+// generateToken returns a random 32-byte string as token
+func (s *Proxy) generateToken() string {
+	mrand.Seed(time.Now().UnixNano())
+	b := make([]byte, 32)
+	mrand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
 
 func generateKey() ([]byte, error) {
@@ -389,4 +584,33 @@ func loadCertificateOrDie(path string) []byte {
 		klog.Fatalf("error loading certificate %s, %v", path, err)
 	}
 	return cert
+}
+
+// isConditionTrue checks cluster specific condition value is True, return false if condition not exists
+func isConditionTrue(cluster *v1alpha1.Cluster, conditionType v1alpha1.ClusterConditionType) bool {
+	for _, condition := range cluster.Status.Conditions {
+		if condition.Type == conditionType && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+// updateClusterCondition updates condition in cluster conditions using giving condition
+// adds condition if not existed
+func updateClusterCondition(cluster *v1alpha1.Cluster, condition v1alpha1.ClusterCondition) {
+	if cluster.Status.Conditions == nil {
+		cluster.Status.Conditions = make([]v1alpha1.ClusterCondition, 0)
+	}
+
+	newConditions := make([]v1alpha1.ClusterCondition, 0)
+	for _, cond := range cluster.Status.Conditions {
+		if cond.Type == condition.Type {
+			continue
+		}
+		newConditions = append(newConditions, cond)
+	}
+
+	newConditions = append(newConditions, condition)
+	cluster.Status.Conditions = newConditions
 }
