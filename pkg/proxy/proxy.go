@@ -417,9 +417,10 @@ func (s *Proxy) addCluster(obj interface{}) {
 		}
 	}
 
+	klog.V(4).Infof("mcService.Spec.ClusterIP '%s', service.Spec.ClusterIP '%s'", mcService.Spec.ClusterIP, service.Spec.ClusterIP)
 	// populates the kubernetes apiEndpoint and kubesphere apiEndpoint
-	cluster.Spec.Connection.KubernetesAPIEndpoint = fmt.Sprintf("https://%s:%d", mcService.Spec.ClusterIP, kubernetesPort)
-	cluster.Spec.Connection.KubeSphereAPIEndpoint = fmt.Sprintf("http://%s:%d", mcService.Spec.ClusterIP, kubespherePort)
+	cluster.Spec.Connection.KubernetesAPIEndpoint = fmt.Sprintf("https://%s:%d", service.Spec.ClusterIP, kubernetesPort)
+	cluster.Spec.Connection.KubeSphereAPIEndpoint = fmt.Sprintf("http://%s:%d", service.Spec.ClusterIP, kubespherePort)
 
 	initializedCondition := v1alpha1.ClusterCondition{
 		Type:               v1alpha1.ClusterInitialized,
