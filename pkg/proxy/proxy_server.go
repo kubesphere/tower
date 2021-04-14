@@ -5,12 +5,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"math/rand"
+	"net"
+	"net/http"
+	"sync"
+	"time"
+
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	k8sproxy "k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/klog"
+
 	"kubesphere.io/tower/pkg/utils"
-	"net"
-	"net/http"
 )
 
 type Server struct {
@@ -30,7 +35,10 @@ type Server struct {
 	server *http.Server
 
 	// http client to do the real proxy
-	httpClient *http.Client
+	httpClient []*http.Client
+
+	// RWMutex to implement safe operation while read or update httpClient Slice
+	rwLock sync.RWMutex
 
 	// Whether to use bearer token, if false, need to pass TLS client certificates
 	useBearerToken bool
@@ -39,7 +47,28 @@ type Server struct {
 	bearerToken []byte
 }
 
-func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port uint16, ca, cert, key, bearerToken, serverCa, serverCert, serverKey []byte) (*Server, error) {
+func newProxyServer(name, host, scheme string, port uint16, useBearerToken bool, transport *http.Transport, servertlsConfig *tls.Config, bearerToken []byte) (*Server, error) {
+	server := &http.Server{
+		Addr:      fmt.Sprintf(":%d", port),
+		TLSConfig: servertlsConfig,
+	}
+
+	return &Server{
+		name:   name,
+		host:   host,
+		scheme: scheme,
+		port:   port,
+		server: server,
+		httpClient: []*http.Client{
+			{Transport: transport},
+		},
+		useBearerToken: useBearerToken,
+		bearerToken:    bearerToken,
+	}, nil
+}
+
+// buildServerData returns http.Transport and tlsConfig, which are necessary for creating proxy server.
+func buildServerData(sshConn utils.GetSSHConn, host string, ca, cert, key, serverCa, serverCert, serverKey []byte) (*http.Transport, bool, *tls.Config, error) {
 	useBearerToken := true
 
 	transport := &http.Transport{
@@ -63,7 +92,7 @@ func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port ui
 	if len(cert) != 0 && len(key) != 0 {
 		certificate, err := tls.X509KeyPair(cert, key)
 		if err != nil {
-			return nil, err
+			return nil, true, nil, err
 		}
 		tlsConfig.Certificates = []tls.Certificate{certificate}
 
@@ -72,47 +101,27 @@ func newProxyServer(sshConn utils.GetSSHConn, name, host, scheme string, port ui
 	tlsConfig.BuildNameToCertificate()
 	transport.TLSClientConfig = tlsConfig
 
-	server := &http.Server{
-		Addr: fmt.Sprintf(":%d", port),
-	}
-
+	var serverTLSConfig = &tls.Config{}
 	if len(serverCa) != 0 {
 		serverCaCertPool := x509.NewCertPool()
 		serverCaCertPool.AppendCertsFromPEM(serverCa)
 
-		if server.TLSConfig == nil {
-			server.TLSConfig = &tls.Config{}
-		}
-
 		// if server ca is given, client certificate are required
-		server.TLSConfig.ClientCAs = serverCaCertPool
-		server.TLSConfig.ClientAuth = tls.RequestClientCert
-		server.TLSConfig.VerifyPeerCertificate = verifyClientCertificate
+		serverTLSConfig.ClientCAs = serverCaCertPool
+		serverTLSConfig.ClientAuth = tls.RequestClientCert
+		serverTLSConfig.VerifyPeerCertificate = verifyClientCertificate
 	}
 
 	if len(serverKey) != 0 && len(serverCert) != 0 {
 		serverCerts, err := tls.X509KeyPair(serverCert, serverKey)
 		if err != nil {
-			return nil, err
+			return nil, true, nil, err
 		}
 
-		if server.TLSConfig == nil {
-			server.TLSConfig = &tls.Config{}
-		}
-
-		server.TLSConfig.Certificates = []tls.Certificate{serverCerts}
+		serverTLSConfig.Certificates = []tls.Certificate{serverCerts}
 	}
 
-	return &Server{
-		name:           name,
-		host:           host,
-		scheme:         scheme,
-		port:           port,
-		server:         server,
-		httpClient:     &http.Client{Transport: transport},
-		useBearerToken: useBearerToken,
-		bearerToken:    bearerToken,
-	}, nil
+	return transport, useBearerToken, serverTLSConfig, nil
 }
 
 // TODO: verify issued client certificate
@@ -135,6 +144,7 @@ func (s *Server) Start(ctx context.Context) error {
 				klog.V(2).Infof("Proxy server %s shut down", s.name)
 			}
 		case <-done:
+			klog.V(2).Infof("Proxy server %s shut down", s.name)
 		}
 	}()
 
@@ -166,7 +176,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.bearerToken))
 	}
 
-	httpProxy := k8sproxy.NewUpgradeAwareHandler(&u, s.httpClient.Transport, false, false, s)
+	// we choose one httpClient randomly
+	rand.Seed(time.Now().UnixNano())
+	s.rwLock.RLock()
+	index := rand.Intn(len(s.httpClient))
+	klog.V(5).Infof("server %s current agent connection length %d, random slice index %d", s.name, len(s.httpClient), index)
+	httpProxy := k8sproxy.NewUpgradeAwareHandler(&u, s.httpClient[index].Transport, false, false, s)
+	s.rwLock.RUnlock()
 	httpProxy.ServeHTTP(w, req)
 }
 

@@ -1,8 +1,9 @@
 package main
 
 import (
-	"kubesphere.io/tower/cmd/agent/app"
 	"log"
+
+	"kubesphere.io/tower/cmd/agent/app"
 )
 
 func main() {
