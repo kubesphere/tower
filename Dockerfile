@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -a -o agent cmd/agent/main.
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM alpine:3.9
+FROM alpine:3.11.11
 WORKDIR /
 COPY --from=builder /workspace/proxy .
 COPY --from=builder /workspace/agent .
