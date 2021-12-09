@@ -20,6 +20,7 @@ import (
 	"k8s.io/klog"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 
+	kubeinformer "k8s.io/client-go/informers"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
 	"kubesphere.io/tower/pkg/proxy"
@@ -60,15 +61,15 @@ func NewProxyCommand() *cobra.Command {
 
 			run := func(ctx context.Context) {
 				agentsInformerFactory := informers.NewSharedInformerFactory(clusterClient, 10*time.Minute)
+				serviceInformerFactory := kubeinformer.NewSharedInformerFactory(kubernetesClient, 10*time.Minute)
 
-				p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Clusters(),
-					clusterClient, kubernetesClient)
+				p, err := proxy.NewServer(options.ProxyOptions, agentsInformerFactory.Cluster().V1alpha1().Clusters(), serviceInformerFactory.Core().V1().Services(), clusterClient, kubernetesClient)
 				if err != nil {
 					klog.Fatalf("Failed to create proxy server, %v", err)
 				}
 
 				agentsInformerFactory.Start(stopCh)
-
+				serviceInformerFactory.Start(stopCh)
 				if err := p.Run(stopCh); err != nil {
 					klog.Fatalf("Failed to start proxy server, %v", err)
 				}

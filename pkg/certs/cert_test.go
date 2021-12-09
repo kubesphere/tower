@@ -4,11 +4,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -58,7 +59,7 @@ func TestIssuerKubeConfig(t *testing.T) {
 	generateCACertificateAndWriteToFile(t)
 	defer cleanCACertificate(t)
 
-	var host = "127.0.0.1"
+	var ips = []string{"127.0.0.1", "192.168.0.1"}
 	var dnsNames = []string{"kubesphere.io"}
 
 	certificateIssuer, err := NewSimpleCertificateIssuer(pathForCert(certsDir, ca), pathForKey(certsDir, ca), "127.0.0.1")
@@ -71,7 +72,7 @@ func TestIssuerKubeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cert, _, err := certificateIssuer.IssueCertAndKey(host, dnsNames...)
+	cert, _, err := certificateIssuer.IssueCertAndKey(ips, dnsNames)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,14 +89,17 @@ func TestIssuerKubeConfig(t *testing.T) {
 
 	var found = false
 	for _, ip := range parsedCert.IPAddresses {
-		if ip.Equal(net.ParseIP(host)) {
-			found = true
-			break
+		for _, ipexpected := range ips {
+			if ip.Equal(net.ParseIP(ipexpected)) {
+				found = true
+				break
+			}
 		}
+
 	}
 
 	if !found {
-		t.Fatalf("%s not in certificate ip addresses %v", host, parsedCert.IPAddresses)
+		t.Fatalf("%s not in certificate ip addresses %v", ips, parsedCert.IPAddresses)
 	}
 
 	certDnsNames := sets.NewString(parsedCert.DNSNames...)
