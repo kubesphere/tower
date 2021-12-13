@@ -77,3 +77,25 @@ node1    Ready    worker   2d3h   v1.17.3
 node2    Ready    worker   2d3h   v1.17.3
 node3    Ready    worker   2d3h   v1.17.3
 ```
+
+* Use tower to make a member cluster kubeapi accessable to public
+  
+If you want to make you member cluster kubeapi accessable to public, create a cluster resource as follows:
+
+```
+apiVersion: cluster.kubesphere.io/v1alpha1
+kind: Cluster
+metadata:
+  name: kind-test
+  namespace: kubesphere-system
+  annotations:
+    tower.kubesphere.io/external-lb-service-annoations: '{"eip.porter.kubesphere.io/v1alpha2":"porter-bgp-eip","lb.kubesphere.io/v1alpha1":"porter","protocol.porter.kubesphere.io/v1alpha1":"bgp"}'
+spec:
+  connection:
+    type: proxy
+    token: ""
+  joinFederation: true
+  externalKubeAPIEnabled: true
+```
+
+With `externalKubeAPIEnabled=true` and `connection.type=proxy` tower will create the serivce with `LoadBlancer` type, content in annotation with key `tower.kubesphere.io/external-lb-service-annoations` will be applied to the service anntations as k-v, so that your can control how the `ccm` process the service.

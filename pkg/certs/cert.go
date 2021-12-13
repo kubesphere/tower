@@ -5,13 +5,14 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"net"
+	"time"
+
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
-	"net"
-	"time"
 )
 
 const (
@@ -150,7 +151,7 @@ func BuildKubeConfigFromSpec(spec *KubeConfigSpec, clustername string) (*clientc
 }
 
 type CertificateIssuer interface {
-	IssueCertAndKey(ip string, dnsNames ...string) ([]byte, []byte, error)
+	IssueCertAndKey(ips []string, dnsNames []string) ([]byte, []byte, error)
 	IssueKubeConfig(clusterName string, apiServer string) ([]byte, error)
 }
 
@@ -193,7 +194,7 @@ func (s *simpleCertificateIssuer) IssueKubeConfig(clusterName string, apiServer 
 }
 
 // IssueCertAndKey issues certificate and key,
-func (s *simpleCertificateIssuer) IssueCertAndKey(ip string, dns ...string) ([]byte, []byte, error) {
+func (s *simpleCertificateIssuer) IssueCertAndKey(ips []string, dns []string) ([]byte, []byte, error) {
 	altNames := certutil.AltNames{
 		DNSNames: defaultAltNamesDNS,
 		IPs:      make([]net.IP, 0),
@@ -203,7 +204,7 @@ func (s *simpleCertificateIssuer) IssueCertAndKey(ip string, dns ...string) ([]b
 		altNames.DNSNames = append(altNames.DNSNames, dns...)
 	}
 
-	if len(ip) != 0 {
+	for _, ip := range ips {
 		altNames.IPs = append(altNames.IPs, net.ParseIP(ip))
 	}
 
