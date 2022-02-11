@@ -187,6 +187,7 @@ func (agent *Agent) connectionLoop() {
 			WriteBufferSize:  1024,
 			HandshakeTimeout: 45 * time.Second,
 			Subprotocols:     []string{version.ProtocolVersion},
+			Proxy:            http.ProxyFromEnvironment,
 		}
 
 		wsHeaders := http.Header{}
