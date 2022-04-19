@@ -10,27 +10,30 @@ import (
 
 var ErrorInvalidConnection = errors.New("invalid connection")
 
+//ErrorNoAvailableConn means there haven't available shh connection.
+var ErrorNoAvailableConn = errors.New("no available ssh connection")
+
 type GetSSHConn func() ssh.Conn
 
 type SshConn struct {
 	dst io.ReadWriteCloser
 }
 
-func NewSshConn(conn GetSSHConn, remote string) net.Conn {
+func NewSshConn(conn GetSSHConn, remote string) (net.Conn, error) {
 	c := conn()
 	if c == nil {
-		return nil
+		return nil, ErrorNoAvailableConn
 	}
 
 	dst, reqs, err := c.OpenChannel("kubesphere", []byte(remote))
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	go ssh.DiscardRequests(reqs)
 
 	return &SshConn{
 		dst: dst,
-	}
+	}, nil
 }
 
 func (s *SshConn) Read(b []byte) (n int, err error) {
