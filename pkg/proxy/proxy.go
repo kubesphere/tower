@@ -669,7 +669,7 @@ func (s *Proxy) addSVC(obj interface{}) {
 		return
 	}
 	// get cluster by svc name
-	clusterName := strings.TrimLeft(svc.Name, svcPrefix)
+	clusterName := strings.TrimPrefix(svc.Name, svcPrefix)
 	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), clusterName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("get cluster with name[%s] failed. err:%v", clusterName, err)
