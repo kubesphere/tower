@@ -77,7 +77,7 @@ func buildServerData(sshConn utils.GetSSHConn, host string, ca, cert, key, serve
 			if c == nil {
 				return nil, fmt.Errorf("no remote connetion available")
 			}
-			return utils.NewSshConn(sshConn, host), nil
+			return utils.NewSshConn(sshConn, host)
 		},
 	}
 
