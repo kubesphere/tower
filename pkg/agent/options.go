@@ -8,7 +8,6 @@ type Options struct {
 	KeepAlive              time.Duration
 	MaxRetryCount          int
 	MaxRetryInterval       time.Duration
-	KubernetesApiserverSvc string
 	KubesphereApiserverSvc string
 	Server                 string
 	Name                   string
