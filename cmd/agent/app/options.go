@@ -31,7 +31,6 @@ func NewAgentRunOptions() *AgentRunOptions {
 func (o *AgentRunOptions) Flags() *pflag.FlagSet {
 	flags := pflag.NewFlagSet("agent", pflag.ContinueOnError)
 	flags.StringVar(&o.AgentOptions.Name, "name", o.AgentOptions.Name, "Agent name")
-	flags.StringVar(&o.AgentOptions.KubernetesApiserverSvc, "kubernetes-service", "kubernetes.default.svc", "Kubernetes service name")
 	flags.StringVar(&o.AgentOptions.KubesphereApiserverSvc, "kubesphere-service", "ks-apiserver.kubesphere-system.svc", "KubeSphere service name")
 	flags.DurationVar(&o.AgentOptions.KeepAlive, "keepalive", o.AgentOptions.KeepAlive, "Keepalive duration")
 	flags.IntVar(&o.AgentOptions.MaxRetryCount, "max-retry", o.AgentOptions.MaxRetryCount, "Maximum retries, 0 means never stop")
@@ -79,7 +78,5 @@ func (o *AgentRunOptions) Print() {
 	klog.V(0).Infof("MaxRetryInterval set to %s\n", o.AgentOptions.MaxRetryInterval)
 	klog.V(0).Infof("Token set to %s\n", o.AgentOptions.Token)
 	klog.V(0).Infof("Kubeconfig set to %s\n", o.AgentOptions.Kubeconfig)
-	klog.V(0).Infof("Kubernetes service set to %s\n", o.AgentOptions.KubernetesApiserverSvc)
 	klog.V(0).Infof("Kubesphere service set to %s\n", o.AgentOptions.KubesphereApiserverSvc)
-
 }

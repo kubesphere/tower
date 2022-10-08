@@ -15,6 +15,7 @@ func NewAgentCommand() *cobra.Command {
 		Use:  "Agent",
 		Long: "Agent client run in user cluster",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			o.Print()
 			if err := o.Validate(); err != nil {
 				return err
 			}

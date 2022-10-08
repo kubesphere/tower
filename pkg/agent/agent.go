@@ -47,7 +47,6 @@ func NewAgent(options *Options) (*Agent, error) {
 		Name:              options.Name,
 		Token:             options.Token,
 		KubeSphereSvcHost: options.KubesphereApiserverSvc,
-		KubernetesSvcHost: options.KubernetesApiserverSvc,
 		Version:           version.BuildVersion,
 	}
 
