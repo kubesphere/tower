@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/ssh"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	k8sproxy "k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/klog"
@@ -68,15 +69,11 @@ func newProxyServer(name, host, scheme string, port uint16, useBearerToken bool,
 }
 
 // buildServerData returns http.Transport and tlsConfig, which are necessary for creating proxy server.
-func buildServerData(sshConn utils.GetSSHConn, host string, ca, cert, key, serverCa, serverCert, serverKey []byte) (*http.Transport, bool, *tls.Config, error) {
+func buildServerData(sshConn ssh.Conn, host string, ca, cert, key, serverCa, serverCert, serverKey []byte) (*http.Transport, bool, *tls.Config, error) {
 	useBearerToken := true
 
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
-			c := sshConn()
-			if c == nil {
-				return nil, fmt.Errorf("no remote connetion available")
-			}
 			return utils.NewSshConn(sshConn, host)
 		},
 	}
