@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"golang.org/x/crypto/ssh"
 	"k8s.io/klog"
+
 	"kubesphere.io/tower/pkg/agent"
-	"kubesphere.io/tower/pkg/utils"
 )
 
 type HTTPProxy struct {
@@ -22,8 +23,8 @@ type HTTPProxy struct {
 	kubesphereAPIServerProxy *Server
 }
 
-func NewHTTPProxy(ssh utils.GetSSHConn, kubernetesPort uint16, kubespherePort uint16, config *agent.Config, ca, serverCert, serverKey []byte) (*HTTPProxy, *http.Transport, *http.Transport, error) {
-	k8stransPort, useBearerToken, servertlsConfig, err := buildServerData(ssh, config.KubernetesSvcHost, config.CAData, config.CertData, config.KeyData, ca, serverCert, serverKey)
+func NewHTTPProxy(sshConn ssh.Conn, kubernetesPort uint16, kubespherePort uint16, config *agent.Config, ca, serverCert, serverKey []byte) (*HTTPProxy, *http.Transport, *http.Transport, error) {
+	k8stransPort, useBearerToken, servertlsConfig, err := buildServerData(sshConn, config.KubernetesSvcHost, config.CAData, config.CertData, config.KeyData, ca, serverCert, serverKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -33,7 +34,7 @@ func NewHTTPProxy(ssh utils.GetSSHConn, kubernetesPort uint16, kubespherePort ui
 		return nil, nil, nil, err
 	}
 
-	kstransPort, useBearerToken, _, err := buildServerData(ssh, config.KubeSphereSvcHost, nil, nil, nil, nil, nil, nil)
+	kstransPort, useBearerToken, _, err := buildServerData(sshConn, config.KubeSphereSvcHost, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
