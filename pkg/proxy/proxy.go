@@ -237,7 +237,7 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	// if the agent has connected the server with the same cluster name, we don't need to create HttpProxy anymore
 	// we only create two new httpTransport objects, then put them into the server's httpClient set.
 	if proxy, ok = s.sessions[c.Name]; !ok {
-		proxy, k8sTransport, ksTransport, err = NewHTTPProxy(func() ssh.Conn { return sshConn }, client.Spec.Connection.KubernetesAPIServerPort, client.Spec.Connection.KubeSphereAPIServerPort, c, s.caCert, cert, key)
+		proxy, k8sTransport, ksTransport, err = NewHTTPProxy(sshConn, client.Spec.Connection.KubernetesAPIServerPort, client.Spec.Connection.KubeSphereAPIServerPort, c, s.caCert, cert, key)
 		if err != nil {
 			failed(err)
 			return
@@ -250,13 +250,13 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 		s.sessions[c.Name] = proxy
 	} else {
-		k8sTransport, _, _, err = buildServerData(func() ssh.Conn { return sshConn }, c.KubernetesSvcHost, c.CAData, c.CertData, c.KeyData, s.caCert, cert, key)
+		k8sTransport, _, _, err = buildServerData(sshConn, c.KubernetesSvcHost, c.CAData, c.CertData, c.KeyData, s.caCert, cert, key)
 		if err != nil {
 			failed(err)
 			return
 		}
 
-		ksTransport, _, _, err = buildServerData(func() ssh.Conn { return sshConn }, c.KubeSphereSvcHost, c.CAData, c.CertData, c.KeyData, s.caCert, cert, key)
+		ksTransport, _, _, err = buildServerData(sshConn, c.KubeSphereSvcHost, c.CAData, c.CertData, c.KeyData, s.caCert, cert, key)
 		if err != nil {
 			failed(err)
 			return

@@ -2,30 +2,25 @@ package utils
 
 import (
 	"errors"
-	"golang.org/x/crypto/ssh"
 	"io"
 	"net"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 var ErrorInvalidConnection = errors.New("invalid connection")
-
-//ErrorNoAvailableConn means there haven't available shh connection.
-var ErrorNoAvailableConn = errors.New("no available ssh connection")
-
-type GetSSHConn func() ssh.Conn
 
 type SshConn struct {
 	dst io.ReadWriteCloser
 }
 
-func NewSshConn(conn GetSSHConn, remote string) (net.Conn, error) {
-	c := conn()
-	if c == nil {
-		return nil, ErrorNoAvailableConn
+func NewSshConn(conn ssh.Conn, remote string) (net.Conn, error) {
+	if conn == nil {
+		return nil, errors.New("the ssh connection is nil")
 	}
 
-	dst, reqs, err := c.OpenChannel("kubesphere", []byte(remote))
+	dst, reqs, err := conn.OpenChannel("kubesphere", []byte(remote))
 	if err != nil {
 		return nil, err
 	}
