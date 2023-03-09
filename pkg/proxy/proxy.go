@@ -10,10 +10,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	mrand "math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"kubesphere.io/tower/pkg/agent"
 	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
@@ -61,7 +61,6 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
-//
 type Proxy struct {
 	httpServer *HTTPServer
 	agents     *utils.Agents
@@ -568,7 +567,6 @@ func (s *Proxy) delete(obj interface{}) {
 	}
 }
 
-//
 func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 
 	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), cluster.Name, metav1.GetOptions{})
@@ -716,7 +714,7 @@ func generateKey() ([]byte, error) {
 }
 
 func loadCertificateOrDie(path string) []byte {
-	cert, err := ioutil.ReadFile(path)
+	cert, err := os.ReadFile(path)
 	if err != nil {
 		klog.Fatalf("error loading certificate %s, %v", path, err)
 	}

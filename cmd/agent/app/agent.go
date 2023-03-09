@@ -2,10 +2,12 @@ package app
 
 import (
 	"flag"
-	"github.com/spf13/cobra"
-	"k8s.io/klog"
-	"kubesphere.io/tower/pkg/agent"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
+
+	"kubesphere.io/tower/pkg/agent"
 )
 
 func NewAgentCommand() *cobra.Command {

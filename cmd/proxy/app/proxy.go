@@ -10,17 +10,16 @@ import (
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	kubeinformer "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/klog"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	kubeinformer "k8s.io/client-go/informers"
 	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
 	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
 	"kubesphere.io/tower/pkg/proxy"
@@ -38,9 +37,8 @@ func NewProxyCommand() *cobra.Command {
 				return err
 			}
 
-			stopCh := signals.SetupSignalHandler()
+			ctx := signals.SetupSignalHandler()
 
-			var config *rest.Config
 			config, err := clientcmd.BuildConfigFromFlags("", options.ProxyOptions.KubeConfigPath)
 			if err != nil {
 				klog.Errorf("Failed to create config from kubeconfig file, %v", err)
@@ -68,27 +66,18 @@ func NewProxyCommand() *cobra.Command {
 					klog.Fatalf("Failed to create proxy server, %v", err)
 				}
 
-				agentsInformerFactory.Start(stopCh)
-				serviceInformerFactory.Start(stopCh)
-				if err := p.Run(stopCh); err != nil {
+				agentsInformerFactory.Start(ctx.Done())
+				serviceInformerFactory.Start(ctx.Done())
+				if err = p.Run(ctx.Done()); err != nil {
 					klog.Fatalf("Failed to start proxy server, %v", err)
 				}
 
-				err = p.Wait()
-				if err != nil {
+				if err = p.Wait(); err != nil {
 					klog.Fatalf("Failed to wait, %v", err)
 				}
 
 				select {}
 			}
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			go func() {
-				<-stopCh
-				cancel()
-			}()
 
 			if !options.LeaderElect {
 				run(ctx)
@@ -103,9 +92,6 @@ func NewProxyCommand() *cobra.Command {
 			// add a uniquifier so that two processes on the same host don't accidentally both become active
 			id = id + "_" + string(uuid.NewUUID())
 
-			// TODO: change lockType to lease
-			// once we finished moving to Kubernetes v1.16+, we
-			// change lockType to lease
 			lock, err := resourcelock.New(resourcelock.LeasesResourceLock,
 				"kubesphere-system",
 				"tower",
@@ -116,8 +102,8 @@ func NewProxyCommand() *cobra.Command {
 					EventRecorder: record.NewBroadcaster().NewRecorder(scheme.Scheme, v1.EventSource{
 						Component: "tower",
 					}),
-				})
-
+				},
+			)
 			if err != nil {
 				klog.Fatalf("error creating lock: %v", err)
 			}

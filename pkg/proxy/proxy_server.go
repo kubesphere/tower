@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	k8sproxy "k8s.io/apimachinery/pkg/util/proxy"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"kubesphere.io/tower/pkg/utils"
 )

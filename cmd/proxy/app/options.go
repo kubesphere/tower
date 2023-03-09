@@ -2,13 +2,14 @@ package app
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"k8s.io/client-go/tools/leaderelection"
-	"kubesphere.io/tower/pkg/proxy"
 	"os"
 	"time"
 
-	"k8s.io/klog"
+	"github.com/spf13/pflag"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/klog/v2"
+
+	"kubesphere.io/tower/pkg/proxy"
 )
 
 type ProxyRunOptions struct {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -15,14 +14,13 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jpillora/backoff"
 	"golang.org/x/crypto/ssh"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
-
-	"github.com/jpillora/backoff"
 )
 
 const (
@@ -69,12 +67,12 @@ func NewAgent(options *Options) (*Agent, error) {
 			return nil, ErrNotInCluster
 		}
 
-		token, err := ioutil.ReadFile(tokenFile)
+		token, err := os.ReadFile(tokenFile)
 		if err != nil {
 			return nil, err
 		}
 
-		ca, err := ioutil.ReadFile(rootCAFile)
+		ca, err := os.ReadFile(rootCAFile)
 		if err != nil {
 			return nil, err
 		}

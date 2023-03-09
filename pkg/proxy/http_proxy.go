@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"golang.org/x/crypto/ssh"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	"kubesphere.io/tower/pkg/agent"
 )
