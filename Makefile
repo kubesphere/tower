@@ -1,8 +1,6 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= kubespheredev/tower:latest
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -46,13 +44,13 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=manager-role webhook paths="./..." output:dir=config/crd/bases
 
 deepcopy:
 	#GO111MODULE=on go install -mod=vendor k8s.io/code-generator/cmd/deepcopy-gen
 	${GOPATH}/bin/deepcopy-gen -i kubesphere.io/tower/pkg/apis/... -h ./hack/boilerplate.go.txt -O zz_generated.deepcopy
 
-clienset:
+clientset:
 	./hack/generate_client.sh
 
 # Run go fmt against code
@@ -87,7 +85,7 @@ ifeq (, $(shell which controller-gen))
 	CONTROLLER_GEN_TMP_DIR=$$(mktemp -d) ;\
 	cd $$CONTROLLER_GEN_TMP_DIR ;\
 	go mod init tmp ;\
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.4 ;\
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.11.3 ;\
 	rm -rf $$CONTROLLER_GEN_TMP_DIR ;\
 	}
 CONTROLLER_GEN=$(GOBIN)/controller-gen

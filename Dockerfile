@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.16 as builder
+FROM golang:1.19 as builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -17,7 +17,6 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 COPY certs/ certs/
-COPY vendor/ vendor/
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -a -o proxy cmd/proxy/main.go
@@ -25,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -a -o agent cmd/agent/main.
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM alpine:3.11.11
+FROM alpine:3.17.2
 WORKDIR /
 COPY --from=builder /workspace/proxy .
 COPY --from=builder /workspace/agent .

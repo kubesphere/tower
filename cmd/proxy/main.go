@@ -1,14 +1,15 @@
 package main
 
 import (
-	"kubesphere.io/tower/cmd/proxy/app"
 	"log"
+
+	"kubesphere.io/tower/cmd/proxy/app"
 )
 
 func main() {
-	command := app.NewProxyCommand()
+	cmd := app.NewProxyCommand()
 
-	if err := command.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		log.Fatalln(err)
 	}
 }

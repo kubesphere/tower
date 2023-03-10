@@ -2,13 +2,15 @@ package app
 
 import (
 	"fmt"
-	"github.com/spf13/pflag"
-	"k8s.io/klog"
-	"kubesphere.io/tower/pkg/agent"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
+	"k8s.io/klog/v2"
+
+	"kubesphere.io/tower/pkg/agent"
 )
 
 type AgentRunOptions struct {

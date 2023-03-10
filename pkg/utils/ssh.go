@@ -2,8 +2,9 @@ package utils
 
 import (
 	"io"
-	"k8s.io/klog"
 	"net"
+
+	"k8s.io/klog/v2"
 )
 
 func HandleTCPStream(src io.ReadWriteCloser, remote string) {

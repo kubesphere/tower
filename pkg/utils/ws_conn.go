@@ -1,10 +1,11 @@
 package utils
 
 import (
-	"github.com/gorilla/websocket"
-	"k8s.io/klog"
 	"net"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"k8s.io/klog/v2"
 )
 
 type wsConn struct {
@@ -19,11 +20,11 @@ func NewWebSocketConn(websocketConn *websocket.Conn) net.Conn {
 	return &c
 }
 
-//Read is not threadsafe though thats okay since there
-//should never be more than one reader
+// Read is not threadsafe though thats okay since there
+// should never be more than one reader
 func (c *wsConn) Read(dst []byte) (int, error) {
 	ldst := len(dst)
-	//use buffer or read new message
+	// use buffer or read new message
 	var src []byte
 	if l := len(c.buff); l > 0 {
 		src = c.buff
@@ -37,21 +38,21 @@ func (c *wsConn) Read(dst []byte) (int, error) {
 		}
 		src = msg
 	}
-	//copy src->dest
+	// copy src->dest
 	var n int
 	if len(src) > ldst {
-		//copy as much as possible of src into dst
+		// copy as much as possible of src into dst
 		n = copy(dst, src[:ldst])
-		//copy remainder into buffer
+		// copy remainder into buffer
 		r := src[ldst:]
 		lr := len(r)
 		c.buff = make([]byte, lr)
 		copy(c.buff, r)
 	} else {
-		//copy all of src into dst
+		// copy all of src into dst
 		n = copy(dst, src)
 	}
-	//return bytes copied
+	// return bytes copied
 	return n, nil
 }
 
