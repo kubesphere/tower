@@ -1,7 +1,0 @@
-domain: kubesphere.io
-repo: kubesphere.io/tower
-resources:
-- group: cluster
-  kind: Agent
-  version: v1alpha1
-version: "2"

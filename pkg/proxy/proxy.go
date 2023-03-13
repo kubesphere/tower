@@ -31,12 +31,12 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
+	"kubesphere.io/api/cluster/v1alpha1"
+	clientset "kubesphere.io/kubesphere/pkg/client/clientset/versioned"
+	clusterinformers "kubesphere.io/kubesphere/pkg/client/informers/externalversions/cluster/v1alpha1"
 
 	"kubesphere.io/tower/pkg/agent"
-	"kubesphere.io/tower/pkg/apis/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
-	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	clusterinformers "kubesphere.io/tower/pkg/client/informers/externalversions/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
 )

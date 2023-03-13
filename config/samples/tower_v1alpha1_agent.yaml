@@ -1,7 +1,0 @@
-apiVersion: tower.kubesphere.io/v1alpha1
-kind: Agent
-metadata:
-  name: agent-sample
-spec:
-  # Add fields here
-  foo: bar

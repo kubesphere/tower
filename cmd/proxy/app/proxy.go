@@ -18,10 +18,10 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
+	clientset "kubesphere.io/kubesphere/pkg/client/clientset/versioned"
+	informers "kubesphere.io/kubesphere/pkg/client/informers/externalversions"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	clientset "kubesphere.io/tower/pkg/client/clientset/versioned"
-	informers "kubesphere.io/tower/pkg/client/informers/externalversions"
 	"kubesphere.io/tower/pkg/proxy"
 )
 
