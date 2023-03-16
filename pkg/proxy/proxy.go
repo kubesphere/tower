@@ -403,27 +403,42 @@ func (s *Proxy) addCluster(obj interface{}) {
 	oldCluster := cluster.DeepCopy()
 	serviceName := fmt.Sprintf("%s%s", svcPrefix, cluster.Name)
 
-	// if the cluster has been initialized, we update the cache and check if need to change service
+	// if the cluster has been initialized, we update the cache and check if we need to change service
 	if isConditionTrue(cluster, v1alpha1.ClusterInitialized) {
 		s.agents.Add(cluster)
-	} else {
-		// allocate ports for kubernetes and kubesphere endpoint
-		port, err := s.allocatePort()
-		if err != nil {
-			klog.Errorf("failed to allocate port for cluster %s, err: %+v", cluster.Name, err)
+
+		if !cluster.Spec.ExternalKubeAPIEnabled {
 			return
 		}
 
-		cluster.Spec.Connection.KubernetesAPIServerPort = port
-		cluster.Spec.Connection.KubeSphereAPIServerPort = port + 10000
-
+		service, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+		if err != nil {
+			klog.Error(err)
+			return
+		}
+		updateServiceByExternalKubeAPI(cluster, service)
+		if _, err = s.createOrUpdateService(serviceName, service); err != nil {
+			klog.Error(err)
+		}
+		return
 	}
+
+	// allocate ports for kubernetes and kubesphere endpoint
+	port, err := s.allocatePort()
+	if err != nil {
+		klog.Errorf("failed to allocate port for cluster %s, err: %+v", cluster.Name, err)
+		return
+	}
+
+	cluster.Spec.Connection.KubernetesAPIServerPort = port
+	cluster.Spec.Connection.KubeSphereAPIServerPort = port + 10000
+
 	if len(cluster.Spec.Connection.Token) == 0 {
 		cluster.Spec.Connection.Token = s.generateToken()
 	}
 
 	// create a proxy service spec
-	mcService := corev1.Service{
+	mcService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
 			Namespace: cluster.Namespace,
@@ -433,6 +448,7 @@ func (s *Proxy) addCluster(obj interface{}) {
 			},
 		},
 		Spec: corev1.ServiceSpec{
+			Type: "ClusterIP",
 			Selector: map[string]string{
 				"app.kubernetes.io/name": "tower",
 				"app":                    "tower",
@@ -455,64 +471,16 @@ func (s *Proxy) addCluster(obj interface{}) {
 	}
 
 	if cluster.Spec.ExternalKubeAPIEnabled {
-		// get lb annotations from cluster annotations
-		externalLBAnno, ok := cluster.Annotations["tower.kubesphere.io/external-lb-service-annoations"]
-		if ok {
-			var annotation map[string]string
-			err := json.Unmarshal([]byte(externalLBAnno), &annotation)
-			if err != nil {
-				klog.Errorf("failed to decode annotation for tower.kubesphere.io/external-lb.err: %+v", err)
-			} else {
-				mcService.Annotations = annotation
-			}
-		}
-		mcService.Spec.Type = "LoadBalancer"
-	} else {
-		mcService.Spec.Type = "ClusterIP"
+		updateServiceByExternalKubeAPI(cluster, mcService)
 	}
 
-	service, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	service, err := s.createOrUpdateService(serviceName, mcService)
 	if err != nil {
-		// proxy service not found, we create the proxy service
-		if apierrors.IsNotFound(err) {
-			service, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Create(context.TODO(),
-				&mcService, metav1.CreateOptions{})
-			if err != nil {
-				klog.Errorf("failed to create service %s. err: %+v", serviceName, err)
-				return
-			}
-		} else {
-			klog.Errorf("failed to get service %s. err: %+v", serviceName, err)
-			return
-		}
-	} else {
-		// update existed proxy service
-		if !reflect.DeepEqual(service.Spec, mcService.Spec) {
-			service.ObjectMeta.Annotations = mcService.Annotations
-			mcService.ObjectMeta = service.ObjectMeta
-			mcService.Spec.ClusterIP = service.Spec.ClusterIP
-
-			err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-				svc, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(),
-					mcService.Name, metav1.GetOptions{})
-				if err != nil {
-					return err
-				}
-
-				mcService.ResourceVersion = svc.ResourceVersion
-				_, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Update(context.TODO(),
-					&mcService, metav1.UpdateOptions{})
-				return err
-			})
-			if err != nil {
-				klog.Errorf("failed to update svc: %s, err: %+v", serviceName, err)
-				return
-			}
-
-		}
+		klog.Error(err)
+		return
 	}
 
-	klog.V(4).Infof("mcService.Spec.ClusterIP '%s', service.Spec.ClusterIP '%s'", mcService.Spec.ClusterIP, service.Spec.ClusterIP)
+	klog.V(4).Infof("service.Spec.ClusterIP '%s'", service.Spec.ClusterIP)
 	// populates the kubernetes apiEndpoint and kubesphere apiEndpoint
 	cluster.Spec.Connection.KubernetesAPIEndpoint = fmt.Sprintf("https://%s:%d", service.Spec.ClusterIP, kubernetesPort)
 	cluster.Spec.Connection.KubeSphereAPIEndpoint = fmt.Sprintf("http://%s:%d", service.Spec.ClusterIP, kubespherePort)
@@ -545,6 +513,60 @@ func (s *Proxy) addCluster(obj interface{}) {
 		}
 	}
 	s.agents.Add(cluster)
+}
+
+func updateServiceByExternalKubeAPI(cluster *v1alpha1.Cluster, service *corev1.Service) {
+	// get lb annotations from cluster annotations
+	externalLBAnnotations, ok := cluster.Annotations["tower.kubesphere.io/external-lb-service-annoations"]
+	if ok {
+		var annotation map[string]string
+		if err := json.Unmarshal([]byte(externalLBAnnotations), &annotation); err != nil {
+			klog.Errorf("failed to decode annotation for tower.kubesphere.io/external-lb.err: %+v", err)
+		} else {
+			service.Annotations = annotation
+		}
+	}
+	service.Spec.Type = "LoadBalancer"
+}
+
+func (s *Proxy) createOrUpdateService(serviceName string, mcService *corev1.Service) (*corev1.Service, error) {
+	service, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get service %s. err: %+v", serviceName, err)
+		}
+		// proxy service not found, we create the proxy service
+		service, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Create(context.TODO(), mcService, metav1.CreateOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create service %s. err: %+v", serviceName, err)
+		}
+		return service, nil
+	}
+
+	// update existed proxy service
+	if reflect.DeepEqual(service.Spec, mcService.Spec) {
+		return service, nil
+	}
+
+	service.ObjectMeta.Annotations = mcService.Annotations
+	mcService.ObjectMeta = service.ObjectMeta
+	mcService.Spec.ClusterIP = service.Spec.ClusterIP
+
+	if err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		svc, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(),
+			mcService.Name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+
+		mcService.ResourceVersion = svc.ResourceVersion
+		_, err = s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Update(context.TODO(),
+			mcService, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("failed to update svc: %s, err: %+v", serviceName, err)
+	}
+	return mcService, nil
 }
 
 func (s *Proxy) delete(obj interface{}) {
