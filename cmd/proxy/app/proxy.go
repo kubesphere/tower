@@ -44,6 +44,8 @@ func NewProxyCommand() *cobra.Command {
 				klog.Errorf("Failed to create config from kubeconfig file, %v", err)
 				return err
 			}
+			config.QPS = 50
+			config.Burst = 100
 
 			kubernetesClient, err := kubernetes.NewForConfig(config)
 			if err != nil {
