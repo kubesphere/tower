@@ -19,6 +19,12 @@ import (
 	"kubesphere.io/tower/pkg/utils"
 )
 
+// Each kubernetesClient has a bearerToken. The bearerToken has an expiration date.
+type ApiClient struct {
+	client      *http.Client
+	bearerToken []byte
+}
+
 type Server struct {
 	// Server name used to identify
 	name string
@@ -35,17 +41,14 @@ type Server struct {
 	//
 	server *http.Server
 
-	// http client to do the real proxy
-	httpClient []*http.Client
+	// kubernetes client to do the real proxy
+	Clients []*ApiClient
 
 	// RWMutex to implement safe operation while read or update httpClient Slice
 	rwLock sync.RWMutex
 
 	// Whether to use bearer token, if false, need to pass TLS client certificates
 	useBearerToken bool
-
-	// Bearer token to do oauth
-	bearerToken []byte
 }
 
 func newProxyServer(name, host, scheme string, port uint16, useBearerToken bool, transport *http.Transport, servertlsConfig *tls.Config, bearerToken []byte) (*Server, error) {
@@ -60,11 +63,13 @@ func newProxyServer(name, host, scheme string, port uint16, useBearerToken bool,
 		scheme: scheme,
 		port:   port,
 		server: server,
-		httpClient: []*http.Client{
-			{Transport: transport},
+		Clients: []*ApiClient{
+			{
+				client:      &http.Client{Transport: transport},
+				bearerToken: bearerToken,
+			},
 		},
 		useBearerToken: useBearerToken,
-		bearerToken:    bearerToken,
 	}, nil
 }
 
@@ -168,17 +173,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	u.Host = s.host
 	u.Scheme = s.scheme
 
-	if s.useBearerToken && len(s.bearerToken) > 0 {
-		req = utilnet.CloneRequest(req)
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.bearerToken))
-	}
-
 	// we choose one httpClient randomly
 	rand.Seed(time.Now().UnixNano())
 	s.rwLock.RLock()
-	index := rand.Intn(len(s.httpClient))
-	klog.V(5).Infof("server %s current agent connection length %d, random slice index %d", s.name, len(s.httpClient), index)
-	httpProxy := k8sproxy.NewUpgradeAwareHandler(&u, s.httpClient[index].Transport, false, false, s)
+	index := rand.Intn(len(s.Clients))
+	if s.useBearerToken && len(s.Clients[index].bearerToken) > 0 {
+		req = utilnet.CloneRequest(req)
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.Clients[index].bearerToken))
+	}
+	klog.V(5).Infof("server %s current agent connection length %d, random slice index %d", s.name, len(s.Clients), index)
+	httpProxy := k8sproxy.NewUpgradeAwareHandler(&u, s.Clients[index].client.Transport, false, false, s)
 	s.rwLock.RUnlock()
 	httpProxy.ServeHTTP(w, req)
 }

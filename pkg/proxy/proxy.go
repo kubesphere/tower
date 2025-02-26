@@ -262,11 +262,11 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 		}
 
 		proxy.kubernetesAPIServerProxy.rwLock.Lock()
-		proxy.kubernetesAPIServerProxy.httpClient = append(proxy.kubernetesAPIServerProxy.httpClient, &http.Client{Transport: k8sTransport})
+		proxy.kubernetesAPIServerProxy.Clients = append(proxy.kubernetesAPIServerProxy.Clients, &ApiClient{client: &http.Client{Transport: k8sTransport}, bearerToken: c.BearerToken})
 		proxy.kubernetesAPIServerProxy.rwLock.Unlock()
 
 		proxy.kubesphereAPIServerProxy.rwLock.Lock()
-		proxy.kubesphereAPIServerProxy.httpClient = append(proxy.kubesphereAPIServerProxy.httpClient, &http.Client{Transport: ksTransport})
+		proxy.kubesphereAPIServerProxy.Clients = append(proxy.kubesphereAPIServerProxy.Clients, &ApiClient{client: &http.Client{Transport: ksTransport}, bearerToken: c.BearerToken})
 		proxy.kubesphereAPIServerProxy.rwLock.Unlock()
 	}
 
@@ -283,11 +283,11 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 
 	proxy.kubernetesAPIServerProxy.rwLock.Lock()
 	defer proxy.kubernetesAPIServerProxy.rwLock.Unlock()
-	k8sLen := len(proxy.kubernetesAPIServerProxy.httpClient)
+	k8sLen := len(proxy.kubernetesAPIServerProxy.Clients)
 
 	proxy.kubesphereAPIServerProxy.rwLock.Lock()
 	defer proxy.kubesphereAPIServerProxy.rwLock.Unlock()
-	ksLen := len(proxy.kubesphereAPIServerProxy.httpClient)
+	ksLen := len(proxy.kubesphereAPIServerProxy.Clients)
 
 	// httpClientLength <= 1 means there is not enough agent connection
 	// we need to delete the key, call cancel(), update cluster status
@@ -300,18 +300,18 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 			return s.Update(client, false)
 		})
 	} else {
-		for i, v := range proxy.kubernetesAPIServerProxy.httpClient {
-			if v.Transport == k8sTransport {
-				proxy.kubernetesAPIServerProxy.httpClient = append(proxy.kubernetesAPIServerProxy.httpClient[:i],
-					proxy.kubernetesAPIServerProxy.httpClient[i+1:]...)
+		for i, v := range proxy.kubernetesAPIServerProxy.Clients {
+			if v.client.Transport == k8sTransport {
+				proxy.kubernetesAPIServerProxy.Clients = append(proxy.kubernetesAPIServerProxy.Clients[:i],
+					proxy.kubernetesAPIServerProxy.Clients[i+1:]...)
 				break
 			}
 		}
 
-		for i, v := range proxy.kubesphereAPIServerProxy.httpClient {
-			if v.Transport == ksTransport {
-				proxy.kubesphereAPIServerProxy.httpClient = append(proxy.kubesphereAPIServerProxy.httpClient[:i],
-					proxy.kubesphereAPIServerProxy.httpClient[i+1:]...)
+		for i, v := range proxy.kubesphereAPIServerProxy.Clients {
+			if v.client.Transport == ksTransport {
+				proxy.kubesphereAPIServerProxy.Clients = append(proxy.kubesphereAPIServerProxy.Clients[:i],
+					proxy.kubesphereAPIServerProxy.Clients[i+1:]...)
 				break
 			}
 		}
