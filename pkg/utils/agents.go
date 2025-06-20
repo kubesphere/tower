@@ -3,8 +3,8 @@ package utils
 import (
 	"sync"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kubesphere.io/api/cluster/v1alpha1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kubesphere.io/tower/pkg/api/cluster/v1alpha1"
 )
 
 type Agents struct {

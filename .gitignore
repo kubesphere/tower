@@ -21,3 +21,4 @@
 bin/
 
 vendor/
+.vscode/

@@ -22,23 +22,27 @@ import (
 	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	kubeinformercorev1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
-	"kubesphere.io/api/cluster/v1alpha1"
-	clientset "kubesphere.io/kubesphere/pkg/client/clientset/versioned"
-	clusterinformers "kubesphere.io/kubesphere/pkg/client/informers/externalversions/cluster/v1alpha1"
-
 	"kubesphere.io/tower/pkg/agent"
+	"kubesphere.io/tower/pkg/api/cluster/v1alpha1"
 	"kubesphere.io/tower/pkg/certs"
 	"kubesphere.io/tower/pkg/utils"
 	"kubesphere.io/tower/pkg/version"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const (
@@ -75,14 +79,90 @@ type Proxy struct {
 	caCert []byte
 	caKey  []byte
 
-	clusterClient clientset.Interface
-	clusterSynced cache.InformerSynced
-
-	k8sClientSet *kubernetes.Clientset
+	clusterClient runtimeclient.Client
+	k8sClientSet  *kubernetes.Clientset
 }
 
-func NewServer(options *Options, clusterInformer clusterinformers.ClusterInformer, serviceInformer kubeinformercorev1.ServiceInformer, client clientset.Interface,
-	k8sClientSet *kubernetes.Clientset) (*Proxy, error) {
+func (s *Proxy) SetupWithManager(mgr ctrl.Manager) error {
+	err := ctrl.NewControllerManagedBy(mgr).
+		For(&v1alpha1.Cluster{}).
+		Watches(
+			&source.Kind{Type: &corev1.Service{}},
+			handler.EnqueueRequestsFromMapFunc(
+				func(h client.Object) []reconcile.Request {
+					if !strings.HasPrefix(h.GetName(), svcPrefix) {
+						klog.V(4).Infof("service:%s has no relation with tower", h.GetName())
+						return nil
+					}
+
+					// get cluster by svc name
+					clusterName := strings.TrimPrefix(h.GetName(), svcPrefix)
+					return []reconcile.Request{{
+						NamespacedName: types.NamespacedName{
+							Name: clusterName,
+						},
+					}}
+				}),
+			builder.WithPredicates(predicate.Funcs{
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return true
+				},
+				CreateFunc: func(e event.CreateEvent) bool {
+					return true
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return false
+				},
+			}),
+		).
+		Named("ProxyController").
+		Complete(s)
+	if err != nil {
+		klog.Errorf("Failed to setup controller for Proxy: %v", err)
+		return err
+	}
+
+	return mgr.Add(s)
+}
+
+// Reconcile reconciles the Cluster object.
+func (s *Proxy) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	klog.V(4).Infof("Starting to sync cluster %s", req.Name)
+	defer klog.V(4).Infof("Finished syncing cluster %s", req.Name)
+
+	cluster := &v1alpha1.Cluster{}
+	if err := s.clusterClient.Get(ctx, req.NamespacedName, cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			s.delete(req.Name)
+			klog.V(4).Infof("Cluster %s not found, skipping reconcile", req.Name)
+			return ctrl.Result{}, nil
+		}
+		klog.Errorf("Failed to get cluster %s: %v", req.Name, err)
+		return ctrl.Result{}, err
+	}
+
+	if !cluster.DeletionTimestamp.IsZero() {
+		s.delete(cluster.Name)
+		klog.V(4).Infof("Cluster %s is being deleted, skipping reconcile", req.Name)
+		return ctrl.Result{}, nil
+	}
+
+	// currently we didn't set cluster.Spec.Enable when creating cluster at client side, so only check
+	// if we enable cluster.Spec.JoinFederation now
+	if !cluster.Spec.JoinFederation || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
+		s.delete(cluster.Name)
+		return ctrl.Result{}, nil
+	}
+
+	if err := s.addCluster(cluster); err != nil {
+		klog.Errorf("Failed to add cluster %s: %v", req.Name, err)
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, s.addSVC(cluster)
+}
+
+func NewServer(options *Options, client runtimeclient.Client, k8sClientSet *kubernetes.Clientset) (*Proxy, error) {
 	s := &Proxy{
 		httpServer:    NewHTTPServer(),
 		agents:        utils.NewAgents(),
@@ -111,21 +191,6 @@ func NewServer(options *Options, clusterInformer clusterinformers.ClusterInforme
 		klog.Fatal(err)
 	}
 
-	clusterInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: s.addCluster,
-		UpdateFunc: func(old, new interface{}) {
-			s.addCluster(new)
-		},
-		DeleteFunc: s.delete,
-	})
-
-	s.clusterSynced = clusterInformer.Informer().HasSynced
-	serviceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: s.addSVC,
-		UpdateFunc: func(old, new interface{}) {
-			s.addSVC(new)
-		},
-	})
 	return s, nil
 }
 
@@ -318,25 +383,31 @@ func (s *Proxy) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *Proxy) Run(stopCh <-chan struct{}) error {
-
-	if !cache.WaitForCacheSync(stopCh, s.clusterSynced) {
-		return fmt.Errorf("failed to wait for caches to sync")
-	}
-	if err := s.Start(s.host, strconv.Itoa(s.port)); err != nil {
-		return err
-	}
-
-	return s.Wait()
-}
-
-func (s *Proxy) Start(host, port string) error {
-	klog.V(0).Infof("Listening on %s:%s...", host, port)
+func (s *Proxy) Start(ctx context.Context) error {
+	port := strconv.Itoa(s.port)
+	klog.V(0).Infof("Listening on %s:%d...", s.host, port)
 
 	h := http.Handler(http.HandlerFunc(s.handleClientHandler))
 	h = wrap(h)
 
-	return s.httpServer.GoListenAndServe(host+":"+port, h)
+	if err := s.httpServer.GoListenAndServe(s.host+":"+port, h); err != nil {
+		klog.Errorf("Failed to start HTTP server on %s:%d: %v", s.host, s.port, err)
+		return err
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- s.Wait()
+	}()
+
+	select {
+	case <-ctx.Done():
+		klog.V(0).Info("Shutting down HTTP server...")
+		s.Close()
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
 }
 
 func wrap(next http.Handler) http.Handler {
@@ -390,15 +461,7 @@ func (s *Proxy) authenticate(c ssh.ConnMetadata, password []byte) (*ssh.Permissi
 // if the cluster type is not proxy, it returns.
 // if not and the cluster object is not initialized, it will allocate port, create a proxy svc(or update the
 // existed svc), generate a token for the proxy connection, finally update the cluster to initialized status.
-func (s *Proxy) addCluster(obj interface{}) {
-	cluster := obj.(*v1alpha1.Cluster)
-	// currently we didn't set cluster.Spec.Enable when creating cluster at client side, so only check
-	// if we enable cluster.Spec.JoinFederation now
-	if !cluster.Spec.JoinFederation || cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
-		s.delete(obj)
-		return
-	}
-
+func (s *Proxy) addCluster(cluster *v1alpha1.Cluster) error {
 	// save a old copy of cluster
 	oldCluster := cluster.DeepCopy()
 	serviceName := fmt.Sprintf("%s%s", svcPrefix, cluster.Name)
@@ -408,26 +471,27 @@ func (s *Proxy) addCluster(obj interface{}) {
 		s.agents.Add(cluster)
 
 		if !cluster.Spec.ExternalKubeAPIEnabled {
-			return
+			return nil
 		}
 
 		service, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
 			klog.Error(err)
-			return
+			return err
 		}
 		updateServiceByExternalKubeAPI(cluster, service)
 		if _, err = s.createOrUpdateService(serviceName, service); err != nil {
 			klog.Error(err)
+			return err
 		}
-		return
+		return nil
 	}
 
 	// allocate ports for kubernetes and kubesphere endpoint
 	port, err := s.allocatePort()
 	if err != nil {
 		klog.Errorf("failed to allocate port for cluster %s, err: %+v", cluster.Name, err)
-		return
+		return err
 	}
 
 	cluster.Spec.Connection.KubernetesAPIServerPort = port
@@ -441,7 +505,7 @@ func (s *Proxy) addCluster(obj interface{}) {
 	mcService := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
-			Namespace: cluster.Namespace,
+			Namespace: defaultAgentNamespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/name": serviceName,
 				"app":                    serviceName,
@@ -477,7 +541,7 @@ func (s *Proxy) addCluster(obj interface{}) {
 	service, err := s.createOrUpdateService(serviceName, mcService)
 	if err != nil {
 		klog.Error(err)
-		return
+		return err
 	}
 
 	klog.V(4).Infof("service.Spec.ClusterIP '%s'", service.Spec.ClusterIP)
@@ -498,21 +562,23 @@ func (s *Proxy) addCluster(obj interface{}) {
 
 	if !reflect.DeepEqual(oldCluster, cluster) {
 		err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-			c, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), cluster.Name, metav1.GetOptions{})
+			c := &v1alpha1.Cluster{}
+			err := s.clusterClient.Get(context.TODO(), types.NamespacedName{Name: cluster.Name}, c)
 			if err != nil {
 				return err
 			}
 
 			cluster.ResourceVersion = c.ResourceVersion
-			cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+			err = s.clusterClient.Update(context.TODO(), cluster)
 			return err
 		})
 		if err != nil {
 			klog.Errorf("failed to update cluster %s, err: %+v", cluster.Name, err)
-			return
+			return err
 		}
 	}
 	s.agents.Add(cluster)
+	return nil
 }
 
 func updateServiceByExternalKubeAPI(cluster *v1alpha1.Cluster, service *corev1.Service) {
@@ -569,29 +635,21 @@ func (s *Proxy) createOrUpdateService(serviceName string, mcService *corev1.Serv
 	return mcService, nil
 }
 
-func (s *Proxy) delete(obj interface{}) {
-	cluster := obj.(*v1alpha1.Cluster)
-
-	_, found := s.agents.Get(cluster.Name)
+func (s *Proxy) delete(clusterName string) {
+	_, found := s.agents.Get(clusterName)
 	if found {
-		s.agents.Del(cluster.Name)
+		s.agents.Del(clusterName)
 	}
 
-	if cluster.Spec.Connection.Type != v1alpha1.ConnectionTypeProxy {
-		return
-	}
-
-	serviceName := fmt.Sprintf("%s%s", svcPrefix, cluster.Name)
-
+	serviceName := fmt.Sprintf("%s%s", svcPrefix, clusterName)
 	if err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Delete(context.TODO(), serviceName,
-		*metav1.NewDeleteOptions(0)); err != nil {
+		*metav1.NewDeleteOptions(0)); err != nil && !apierrors.IsNotFound(err) {
 		klog.Errorf("failed to delete service %s, err: %+v", serviceName, err)
 	}
 }
 
 func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
-
-	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), cluster.Name, metav1.GetOptions{})
+	err := s.clusterClient.Get(context.TODO(), types.NamespacedName{Name: cluster.Name}, cluster)
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -631,7 +689,7 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 	newConditions = append(newConditions, statusCondition)
 	cluster.Status.Conditions = newConditions
 
-	cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+	err = s.clusterClient.Update(context.TODO(), cluster)
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -645,7 +703,8 @@ func (s *Proxy) Update(cluster *v1alpha1.Cluster, connected bool) error {
 func (s *Proxy) allocatePort() (uint16, error) {
 	mrand.Seed(time.Now().UnixNano())
 
-	clusters, err := s.clusterClient.ClusterV1alpha1().Clusters().List(context.TODO(), metav1.ListOptions{})
+	clusters := &v1alpha1.ClusterList{}
+	err := s.clusterClient.List(context.TODO(), clusters)
 	if err != nil {
 		return 0, err
 	}
@@ -681,19 +740,15 @@ func (s *Proxy) generateToken() string {
 }
 
 // when external svc becomes active update cluster info
-func (s *Proxy) addSVC(obj interface{}) {
-	svc := obj.(*v1.Service)
-	klog.V(4).Infof("service:%s found", svc.Name)
-	if !strings.HasPrefix(svc.Name, svcPrefix) {
-		klog.V(4).Infof("service:%s has no relation with tower", svc.Name)
-		return
-	}
-	// get cluster by svc name
-	clusterName := strings.TrimPrefix(svc.Name, svcPrefix)
-	cluster, err := s.clusterClient.ClusterV1alpha1().Clusters().Get(context.TODO(), clusterName, metav1.GetOptions{})
+func (s *Proxy) addSVC(cluster *v1alpha1.Cluster) error {
+	clone := cluster.DeepCopy()
+	serviceName := fmt.Sprintf("%s%s", svcPrefix, cluster.Name)
+	svc, err := s.k8sClientSet.CoreV1().Services(defaultAgentNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("get cluster with name[%s] failed. err:%v", clusterName, err)
+		klog.Error(err)
+		return err
 	}
+
 	if len(svc.Status.LoadBalancer.Ingress) > 0 {
 		klog.V(2).Infof("service:%s has ready with external ip", svc.Name)
 		// get cluster by service name
@@ -704,21 +759,42 @@ func (s *Proxy) addSVC(obj interface{}) {
 			externalAddr = svc.Status.LoadBalancer.Ingress[0].Hostname
 		}
 		cluster.Spec.Connection.ExternalKubernetesAPIEndpoint = fmt.Sprintf("https://%s:%d", externalAddr, kubernetesPort)
-		cluster, err = s.clusterClient.ClusterV1alpha1().Clusters().Update(context.TODO(), cluster, metav1.UpdateOptions{})
+		err = s.clusterClient.Update(context.TODO(), cluster)
 		if err != nil {
-			klog.Errorf("update cluster:%s error:%v", clusterName, err)
-		} else {
-			externalLBCondition := v1alpha1.ClusterCondition{
-				Type:               v1alpha1.ClusterExternalAccessReady,
-				Status:             corev1.ConditionTrue,
-				Reason:             string(v1alpha1.ClusterInitialized),
-				Message:            "Cluster external kubeapi has been initialized",
-				LastUpdateTime:     metav1.Now(),
-				LastTransitionTime: metav1.Now(),
+			klog.Errorf("update cluster:%s error:%v", cluster.Name, err)
+			return err
+		}
+
+		externalLBCondition := v1alpha1.ClusterCondition{
+			Type:               v1alpha1.ClusterExternalAccessReady,
+			Status:             corev1.ConditionTrue,
+			Reason:             string(v1alpha1.ClusterInitialized),
+			Message:            "Cluster external kubeapi has been initialized",
+			LastUpdateTime:     metav1.Now(),
+			LastTransitionTime: metav1.Now(),
+		}
+		updateClusterCondition(cluster, externalLBCondition)
+
+		if !reflect.DeepEqual(clone, cluster) {
+			err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				c := &v1alpha1.Cluster{}
+				err := s.clusterClient.Get(context.TODO(), types.NamespacedName{Name: cluster.Name}, c)
+				if err != nil {
+					return err
+				}
+
+				cluster.ResourceVersion = c.ResourceVersion
+				err = s.clusterClient.Update(context.TODO(), cluster)
+				return err
+			})
+			if err != nil {
+				klog.Errorf("failed to update cluster %s, err: %+v", cluster.Name, err)
+				return err
 			}
-			updateClusterCondition(cluster, externalLBCondition)
 		}
 	}
+
+	return nil
 }
 
 func generateKey() ([]byte, error) {
