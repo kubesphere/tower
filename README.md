@@ -99,3 +99,4 @@ spec:
 ```
 
 With `externalKubeAPIEnabled=true` and `connection.type=proxy` tower will create the serivce with `LoadBlancer` type, content in annotation with key `tower.kubesphere.io/external-lb-service-annoations` will be applied to the service anntations as k-v, so that your can control how the `ccm` process the service.
+##
