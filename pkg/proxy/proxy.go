@@ -583,7 +583,10 @@ func (s *Proxy) addCluster(cluster *v1alpha1.Cluster) error {
 
 func updateServiceByExternalKubeAPI(cluster *v1alpha1.Cluster, service *corev1.Service) {
 	// get lb annotations from cluster annotations
-	externalLBAnnotations, ok := cluster.Annotations["tower.kubesphere.io/external-lb-service-annoations"]
+	externalLBAnnotations, ok := cluster.Annotations["tower.kubesphere.io/external-lb-service-annotations"]
+	if !ok {
+		externalLBAnnotations, ok = cluster.Annotations["tower.kubesphere.io/external-lb-service-annoations"]
+	}
 	if ok {
 		var annotation map[string]string
 		if err := json.Unmarshal([]byte(externalLBAnnotations), &annotation); err != nil {
@@ -717,7 +720,7 @@ func (s *Proxy) allocatePort() (uint16, error) {
 		for _, item := range clusters.Items {
 			if item.Spec.Connection.Type == v1alpha1.ConnectionTypeProxy &&
 				item.Spec.Connection.KubernetesAPIServerPort != 0 &&
-				item.Spec.Connection.KubeSphereAPIServerPort == port {
+				item.Spec.Connection.KubernetesAPIServerPort == port {
 				collision = true
 				break
 			}

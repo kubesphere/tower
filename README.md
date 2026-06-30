@@ -89,7 +89,7 @@ metadata:
   name: kind-test
   namespace: kubesphere-system
   annotations:
-    tower.kubesphere.io/external-lb-service-annoations: '{"eip.porter.kubesphere.io/v1alpha2":"porter-bgp-eip","lb.kubesphere.io/v1alpha1":"porter","protocol.porter.kubesphere.io/v1alpha1":"bgp"}'
+    tower.kubesphere.io/external-lb-service-annotations: '{"eip.porter.kubesphere.io/v1alpha2":"porter-bgp-eip","lb.kubesphere.io/v1alpha1":"porter","protocol.porter.kubesphere.io/v1alpha1":"bgp"}'
 spec:
   connection:
     type: proxy
@@ -98,4 +98,4 @@ spec:
   externalKubeAPIEnabled: true
 ```
 
-With `externalKubeAPIEnabled=true` and `connection.type=proxy` tower will create the serivce with `LoadBlancer` type, content in annotation with key `tower.kubesphere.io/external-lb-service-annoations` will be applied to the service anntations as k-v, so that your can control how the `ccm` process the service.
+With `externalKubeAPIEnabled=true` and `connection.type=proxy` tower will create the serivce with `LoadBlancer` type, content in annotation with key `tower.kubesphere.io/external-lb-service-annotations` will be applied to the service anntations as k-v, so that your can control how the `ccm` process the service.
